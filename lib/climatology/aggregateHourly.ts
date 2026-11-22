@@ -21,6 +21,8 @@ export function computeRainDeltas(rawPoints: SensorDate[]): (SensorDate & { rain
   const MAX_RAINRATE_MM_HR = 300;   // World-record-level cap
   const MAX_INTERVAL_SEC   = 1800;  // 30-minute gap cap — ignore large data gaps
   const MAX_DELTA_PER_INTERVAL = 50; // Plausible physical rain increment limit per reading (mm)
+  const SENSOR_JITTER_THRESHOLD = 1.0; // mm (noise / 1-tip vibration tolerance)
+  const MAX_RESET_BASE = 5.0; // mm (max plausible counter value on daily reset)
 
   let prevValidRainfall: number | null = null;
 
@@ -51,10 +53,19 @@ export function computeRainDeltas(rawPoints: SensorDate[]): (SensorDate & { rain
           // Normal physical accumulation between readings
           rainDelta = diff;
           prevValidRainfall = curRf;
-        } else if (diff < 0 && curRf >= 0 && curRf <= MAX_DELTA_PER_INTERVAL) {
-          // Counter reset (e.g. at 00:00 UTC / 07:00 WIB daily boundary or station reboot)
-          rainDelta = curRf;
-          prevValidRainfall = curRf;
+        } else if (diff < 0) {
+          if (Math.abs(diff) <= SENSOR_JITTER_THRESHOLD) {
+            // Micro-jitter / sensor noise drop (e.g. 1-tip vibration <= 1.0 mm): ignore, keep prevValidRainfall
+            rainDelta = 0;
+          } else if (curRf >= 0 && curRf <= MAX_RESET_BASE) {
+            // Valid daily counter reset (00:00 UTC / 07:00 WIB or logger reboot) returning near zero
+            rainDelta = curRf;
+            prevValidRainfall = curRf;
+          } else {
+            // Anomalous negative drop while counter remains high (> 5.0 mm): do NOT add curRf
+            rainDelta = 0;
+            prevValidRainfall = curRf;
+          }
         } else if (diff > MAX_DELTA_PER_INTERVAL) {
           // Spurious spike / sensor glitch (> 50 mm in single reading): do not accumulate and keep prevValidRainfall
           rainDelta = 0;

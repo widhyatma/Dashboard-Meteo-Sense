@@ -93,9 +93,12 @@ export const formatDateTimeForDisplay = (date: Date): string => {
 export function aggregateHourly(rows: SensorDate[]): HourlyRecord[] {
   const MAX_RAINRATE_MM_HR = 300;  // Physical upper bound
   const MAX_INTERVAL_SEC   = 1800; // 30-min gap — ignore long data gaps
+  const SENSOR_JITTER_THRESHOLD = 1.0; // mm (noise / 1-tip vibration tolerance)
+  const MAX_RESET_BASE = 5.0; // mm (max plausible counter value on daily reset)
 
   // Sort globally first so delta computation is correct across hour boundaries
   const sorted = [...rows].sort((a, b) => a.timestamp - b.timestamp);
+  let prevValidRainfall: number | null = null;
 
   // Compute delta contribution for each reading:
   // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
@@ -110,25 +113,46 @@ export function aggregateHourly(rows: SensorDate[]): HourlyRecord[] {
       // 1. Primary: Cumulative rainfall counter delta
       if (
         p.rainfall != null && Number.isFinite(Number(p.rainfall)) &&
-        prev.rainfall != null && Number.isFinite(Number(prev.rainfall))
+        prevValidRainfall !== null
       ) {
         const curRf = Number(p.rainfall);
-        const prevRf = Number(prev.rainfall);
+        const prevRf = prevValidRainfall;
         const diff = curRf - prevRf;
 
         if (diff >= 0 && diff <= 50) {
           // Normal accumulation within realistic physical limit per interval (<= 50 mm)
           rainDelta = diff;
-        } else if (diff < 0 && curRf >= 0 && curRf <= 50) {
-          // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
-          rainDelta = curRf;
+          prevValidRainfall = curRf;
+        } else if (diff < 0) {
+          if (Math.abs(diff) <= SENSOR_JITTER_THRESHOLD) {
+            // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevValidRainfall
+            rainDelta = 0;
+          } else if (curRf >= 0 && curRf <= MAX_RESET_BASE) {
+            // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
+            rainDelta = curRf;
+            prevValidRainfall = curRf;
+          } else {
+            // Anomalous negative drop while counter remains high (> 5.0 mm): do NOT add curRf
+            rainDelta = 0;
+            prevValidRainfall = curRf;
+          }
         }
-      } 
+      } else if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
+        prevValidRainfall = Number(p.rainfall);
+      }
       // 2. Secondary fallback: When rainfall counter is unavailable, integrate instantaneous rainrate
       else if (deltaSeconds > 0 && deltaSeconds <= MAX_INTERVAL_SEC) {
         const rr = Number(p.rainrate);
         const validRR = Number.isFinite(rr) && rr >= 0 ? Math.min(rr, MAX_RAINRATE_MM_HR) : 0;
         rainDelta = validRR * (deltaSeconds / 3600);
+      }
+    } else {
+      if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
+        const r0 = Number(p.rainfall);
+        if (r0 >= 0 && r0 <= 50) {
+          prevValidRainfall = r0;
+          rainDelta = r0 <= MAX_RESET_BASE ? r0 : 0;
+        }
       }
     }
 
@@ -499,9 +523,12 @@ const FMT_HOUR_UTC = new Intl.DateTimeFormat("id-ID", {
 export function aggregateHourlyUTC(rows: SensorDate[]): HourlyRecord[] {
   const MAX_RAINRATE_MM_HR = 300;  // Physical upper bound
   const MAX_INTERVAL_SEC   = 1800; // 30-min gap — ignore long data gaps
+  const SENSOR_JITTER_THRESHOLD = 1.0; // mm (noise / 1-tip vibration tolerance)
+  const MAX_RESET_BASE = 5.0; // mm (max plausible counter value on daily reset)
 
   // Sort globally first so delta computation is correct across hour boundaries
   const sorted = [...rows].sort((a, b) => a.timestamp - b.timestamp);
+  let prevValidRainfall: number | null = null;
 
   // Compute delta contribution for each reading:
   // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
@@ -516,25 +543,46 @@ export function aggregateHourlyUTC(rows: SensorDate[]): HourlyRecord[] {
       // 1. Primary: Cumulative rainfall counter delta
       if (
         p.rainfall != null && Number.isFinite(Number(p.rainfall)) &&
-        prev.rainfall != null && Number.isFinite(Number(prev.rainfall))
+        prevValidRainfall !== null
       ) {
         const curRf = Number(p.rainfall);
-        const prevRf = Number(prev.rainfall);
+        const prevRf = prevValidRainfall;
         const diff = curRf - prevRf;
 
         if (diff >= 0 && diff <= 50) {
           // Normal accumulation within realistic physical limit per interval (<= 50 mm)
           rainDelta = diff;
-        } else if (diff < 0 && curRf >= 0 && curRf <= 50) {
-          // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
-          rainDelta = curRf;
+          prevValidRainfall = curRf;
+        } else if (diff < 0) {
+          if (Math.abs(diff) <= SENSOR_JITTER_THRESHOLD) {
+            // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevValidRainfall
+            rainDelta = 0;
+          } else if (curRf >= 0 && curRf <= MAX_RESET_BASE) {
+            // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
+            rainDelta = curRf;
+            prevValidRainfall = curRf;
+          } else {
+            // Anomalous negative drop while counter remains high (> 5.0 mm): do NOT add curRf
+            rainDelta = 0;
+            prevValidRainfall = curRf;
+          }
         }
-      } 
+      } else if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
+        prevValidRainfall = Number(p.rainfall);
+      }
       // 2. Secondary fallback: When rainfall counter is unavailable, integrate instantaneous rainrate
       else if (deltaSeconds > 0 && deltaSeconds <= MAX_INTERVAL_SEC) {
         const rr = Number(p.rainrate);
         const validRR = Number.isFinite(rr) && rr >= 0 ? Math.min(rr, MAX_RAINRATE_MM_HR) : 0;
         rainDelta = validRR * (deltaSeconds / 3600);
+      }
+    } else {
+      if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
+        const r0 = Number(p.rainfall);
+        if (r0 >= 0 && r0 <= 50) {
+          prevValidRainfall = r0;
+          rainDelta = r0 <= MAX_RESET_BASE ? r0 : 0;
+        }
       }
     }
 

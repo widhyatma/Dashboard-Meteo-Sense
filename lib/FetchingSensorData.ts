@@ -286,11 +286,22 @@ export async function fetchSensorDataByDateRange(
             const diff = rf - prevRainfallVal;
             if (diff >= 0 && diff <= 50) {
               b.rainTotal += diff;
-            } else if (diff < 0 && rf >= 0 && rf <= 50) {
-              b.rainTotal += rf;
+              prevRainfallVal = rf;
+            } else if (diff < 0) {
+              if (Math.abs(diff) <= 1.0) {
+                // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevRainfallVal
+              } else if (rf >= 0 && rf <= 5.0) {
+                // Valid daily counter reset (00:00 UTC / 07:00 WIB or logger reboot) returning near zero
+                b.rainTotal += rf;
+                prevRainfallVal = rf;
+              } else {
+                // Anomalous drop while counter remains high (> 5.0 mm): do NOT add rf to rainTotal
+                prevRainfallVal = rf;
+              }
             }
+          } else {
+            prevRainfallVal = rf;
           }
-          prevRainfallVal = rf;
         } else if (data.rainrate != null && Number.isFinite(Number(data.rainrate))) {
           const rr = Math.min(Math.max(0, Number(data.rainrate)), 300);
           b.rainTotal += rr * (60 / 3600);

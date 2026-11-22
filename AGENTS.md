@@ -58,6 +58,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - Modul pelaporan curah hujan (`LaporanCurahHujan.tsx`) harus menjadikan Standar UTC sebagai standar baku utama (default).
 - **Sensor Aggregation Integrity**:
   - Fungsi agregasi curah hujan (`aggregateDailyUTC` dan `aggregateHourlyUTC`) wajib mengakumulasi pulsa sensor diskrit (`rainfall`) maupun integrasi laju hujan kontinu (`rainrate * dt`) agar tidak ada presipitasi yang terlewat.
+- **Cumulative Counter Reset & Jitter Protection**:
+  - Daily tipping bucket counters (`rainfall`) yang mengalami fluktuasi/jitter negatif mikro ($\Delta R < 0$ di mana $|\Delta R| \le 1.0\text{ mm}$, seperti 1-tip getaran mekanik atau noise desimal) DILARANG KERAS dianggap sebagai reset counter, dan wajib menghasilkan $\Delta R = 0$ tanpa mengubah acuan counter sebelumnya.
+  - Reset counter harian valid (pada pergantian hari 00:00 UTC / 07:00 WIB atau reboot stasiun) HANYA terjadi jika nilai pembacaan baru kembali ke mendekati nol ($R_t \le 5.0\text{ mm}$). Jika $R_t > 5.0\text{ mm}$ setelah terjadi penurunan ($\Delta R < 0$), maka kejadian tersebut adalah anomali transmisi/glitch sinyal dan DILARANG KERAS menambahkan seluruh nilai $R_t$ ke akumulasi hujan harian.
 - **Physical Boundary for Visual Gauges**:
   - Tabung ukur curah hujan visual (*Rain Measuring Cup*) wajib menampilkan tabung kosong sempurna (tinggi cairan = 0%) saat curah hujan bernilai 0.0 mm.
 
