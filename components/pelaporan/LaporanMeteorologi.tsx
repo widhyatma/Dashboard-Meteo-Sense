@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast"
 import {
   WeatherRecord,
   aggregateDaily,
+  aggregateDailyUTC,
   formatIdDateShort,
   formatIdDateDash,
   formatYMD,
@@ -250,6 +251,7 @@ export default function LaporanMeteorologi({ sensorId, sensorName, displayName }
   const [loading, setLoading] = useState(false)
   const [rawWeatherData, setRawWeatherData] = useState<WeatherRecord[]>([])
   const [isExporting, setIsExporting] = useState(false)
+  const [observationMode, setObservationMode] = useState<"calendar" | "utc">("calendar")
   const reportId = "meteorologi-print-area";
 
   // --- ERA5 Calibration & Correction State ---
@@ -343,7 +345,8 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
         return;
       }
 
-      const filename = `Laporan_Meteorologi_${sensorName.replace(/\s+/g, '_')}_${formatYMD(new Date())}`;
+      const modeSuffix = observationMode === 'utc' ? 'UTC' : 'WIB';
+      const filename = `Laporan_Meteorologi_${sensorName.replace(/\s+/g, '_')}_${formatYMD(new Date())}_${modeSuffix}`;
 
       if (type === 'png') exportAsPNG(canvas, filename);
       else if (type === 'jpg') exportAsJPEG(canvas, filename);
@@ -367,12 +370,25 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
 
     setLoading(true)
     try {
-      const start = new Date(dateRange.from)
-      start.setHours(0, 0, 0, 0)
-      const end = new Date(dateRange.to)
-      end.setHours(23, 59, 59, 999)
+      let startMs: number;
+      let endMs: number;
 
-      const raw = await fetchSensorDataByDateRange(sensorId, start.getTime(), end.getTime(), true, false, "hourly");
+      if (observationMode === "calendar") {
+        const start = new Date(dateRange.from)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(dateRange.to)
+        end.setHours(23, 59, 59, 999)
+        startMs = start.getTime();
+        endMs = end.getTime();
+      } else {
+        // BMKG & WMO Standard Synoptic UTC Window (00:00:00.000 – 23:59:59.999 UTC)
+        const fromDate = new Date(dateRange.from);
+        const toDate = new Date(dateRange.to);
+        startMs = Date.UTC(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0, 0, 0, 0);
+        endMs = Date.UTC(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999);
+      }
+
+      const raw = await fetchSensorDataByDateRange(sensorId, startMs, endMs, true, false, "hourly");
 
       if (!raw || raw.length === 0) {
         toast({ title: "Informasi", description: "Tidak ada data pada periode tersebut" })
@@ -381,7 +397,9 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
         return
       }
 
-      const records: WeatherRecord[] = aggregateDaily(raw)
+      const records: WeatherRecord[] = observationMode === "utc"
+        ? aggregateDailyUTC(raw)
+        : aggregateDaily(raw);
       records.sort((a, b) => a.date.localeCompare(b.date))
 
       setRawWeatherData(records)
@@ -396,7 +414,8 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
 
   const handleDownloadCSV = () => {
     if (weatherData.length === 0) return;
-    exportToCSV(weatherData, `Laporan_Meteorologi_${sensorName.replace(/\s+/g, '_')}_${formatYMD(new Date())}.csv`);
+    const modeSuffix = observationMode === 'utc' ? 'UTC' : 'WIB';
+    exportToCSV(weatherData, `Laporan_Meteorologi_${sensorName.replace(/\s+/g, '_')}_${formatYMD(new Date())}_${modeSuffix}.csv`);
   }
 
   // Sync dateRange when mode changes
@@ -414,13 +433,13 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
     }
   }, [mode, dasarianYear, dasarianMonth, dasarianNum]);
 
-  // Auto-fetch whenever dateRange changes
+  // Auto-fetch whenever dateRange or observationMode changes
   useEffect(() => {
     if (mode === 'custom') return;
     if (!sensorId || !dateRange?.from || !dateRange?.to) return;
     generateReport();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, sensorId]);
+  }, [dateRange, sensorId, observationMode]);
 
   const handleSelectMode = (newMode: PeriodMode) => {
     setMode(newMode);
@@ -441,28 +460,53 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
                 Periode Analisis Laporan
               </label>
 
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border">
-                <Button
-                  variant={viewMode === 'web' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('web')}
-                  className={cn("h-7 text-xs px-2 sm:px-3 font-medium", viewMode === 'web' && "bg-white dark:bg-slate-900 text-blue-600 shadow-sm")}
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
-                  <span className="hidden min-[400px]:inline">Dashboard Web</span>
-                  <span className="min-[400px]:hidden">Web</span>
-                </Button>
-                <Button
-                  variant={viewMode === 'print' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('print')}
-                  className={cn("h-7 text-xs px-2 sm:px-3 font-medium", viewMode === 'print' && "bg-white dark:bg-slate-900 text-indigo-600 shadow-sm")}
-                >
-                  <Eye className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
-                  <span className="hidden min-[400px]:inline">Pratinjau Cetak (A4)</span>
-                  <span className="min-[400px]:hidden">Cetak</span>
-                </Button>
+              {/* Observation Standard & View Mode Toggle */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Observation Mode Toggle */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border">
+                  <Button
+                    variant={observationMode === 'calendar' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setObservationMode('calendar')}
+                    className={cn("h-7 text-xs px-2 sm:px-2.5 font-medium", observationMode === 'calendar' && "bg-white dark:bg-slate-900 text-blue-600 shadow-sm")}
+                    title="00:00 – 23:59 WIB (Localtime / Hari Kalender Lokal)"
+                  >
+                    Localtime (WIB)
+                  </Button>
+                  <Button
+                    variant={observationMode === 'utc' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setObservationMode('utc')}
+                    className={cn("h-7 text-xs px-2 sm:px-2.5 font-medium", observationMode === 'utc' && "bg-white dark:bg-slate-900 text-sky-600 shadow-sm")}
+                    title="00:00 – 24:00 UTC (07:00 – 07:00 WIB H+1) Standar Baku WMO/BMKG"
+                  >
+                    UTC (BMKG)
+                  </Button>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border">
+                  <Button
+                    variant={viewMode === 'web' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('web')}
+                    className={cn("h-7 text-xs px-2 sm:px-3 font-medium", viewMode === 'web' && "bg-white dark:bg-slate-900 text-blue-600 shadow-sm")}
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
+                    <span className="hidden min-[400px]:inline">Dashboard Web</span>
+                    <span className="min-[400px]:hidden">Web</span>
+                  </Button>
+                  <Button
+                    variant={viewMode === 'print' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('print')}
+                    className={cn("h-7 text-xs px-2 sm:px-3 font-medium", viewMode === 'print' && "bg-white dark:bg-slate-900 text-indigo-600 shadow-sm")}
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
+                    <span className="hidden min-[400px]:inline">Pratinjau Cetak (A4)</span>
+                    <span className="min-[400px]:hidden">Cetak</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -906,7 +950,7 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
                 title="Laporan Meteorologi"
                 sensorName={sensorName}
                 generatedBy={displayName}
-                periodLabel={`${dateRange?.from ? formatIdDateShort(dateRange.from) : ''} - ${dateRange?.to ? formatIdDateShort(dateRange.to) : ''}`}
+                periodLabel={`${dateRange?.from ? formatIdDateShort(dateRange.from) : ''} - ${dateRange?.to ? formatIdDateShort(dateRange.to) : ''}${observationMode === 'utc' ? ' (UTC)' : ' (Localtime)'}`}
                 orientation="portrait"
               >
                 <section className="space-y-4 mt-6 break-inside-avoid">
@@ -1055,7 +1099,7 @@ Tekanan Udara Rata-Rata: ${minPress} - ${maxPress} hPa`;
           title="Laporan Meteorologi"
           sensorName={sensorName}
           generatedBy={displayName}
-          periodLabel={`${dateRange?.from ? formatIdDateShort(dateRange.from) : ''} - ${dateRange?.to ? formatIdDateShort(dateRange.to) : ''}`}
+          periodLabel={`${dateRange?.from ? formatIdDateShort(dateRange.from) : ''} - ${dateRange?.to ? formatIdDateShort(dateRange.to) : ''}${observationMode === 'utc' ? ' (UTC)' : ' (Localtime)'}`}
           orientation="portrait"
         >
           <section className="space-y-4 mt-6 break-inside-avoid">

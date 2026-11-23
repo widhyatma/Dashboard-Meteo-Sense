@@ -103,7 +103,14 @@ export function aggregateHourly(rows: SensorDate[]): HourlyRecord[] {
   // Compute delta contribution for each reading:
   // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
   // We compute the positive delta (difference) between consecutive readings to obtain true physical precipitation.
+  // Pre-aggregated hourly inputs (marked by tempMax) already represent hourly totals, so _rainContrib = p.rainfall.
   const withContrib = sorted.map((p, index) => {
+    // 0. Pre-aggregated hourly record: rainfall is already the accumulated delta for this hour
+    if ((p as any).tempMax != null) {
+      const r = Number(p.rainfall);
+      return { ...p, _rainContrib: Number.isFinite(r) && r >= 0 ? r : 0 };
+    }
+
     let rainDelta = 0;
 
     if (index > 0) {
@@ -533,7 +540,14 @@ export function aggregateHourlyUTC(rows: SensorDate[]): HourlyRecord[] {
   // Compute delta contribution for each reading:
   // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
   // We compute the positive delta (difference) between consecutive readings to obtain true physical precipitation.
+  // Pre-aggregated hourly inputs (marked by tempMax) already represent hourly totals, so _rainContrib = p.rainfall.
   const withContrib = sorted.map((p, index) => {
+    // 0. Pre-aggregated hourly record: rainfall is already the accumulated delta for this hour
+    if ((p as any).tempMax != null) {
+      const r = Number(p.rainfall);
+      return { ...p, _rainContrib: Number.isFinite(r) && r >= 0 ? r : 0 };
+    }
+
     let rainDelta = 0;
 
     if (index > 0) {
