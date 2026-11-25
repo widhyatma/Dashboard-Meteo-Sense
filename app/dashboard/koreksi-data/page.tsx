@@ -440,6 +440,8 @@ export default function KoreksiDataPage() {
               isFilterDirty={data.isFilterDirty}
               setShowImputationConfirmModal={imputation.setShowImputationConfirmModal}
               selectedVar={selectedVar}
+              effectiveEndMs={imputation.effectiveEndMs}
+              isClampedToLastData={imputation.isClampedToLastData}
             />
           )}
         </TabsContent>
@@ -492,6 +494,8 @@ export default function KoreksiDataPage() {
         startTimeStr={data.startTimeStr}
         endDateStr={data.endDateStr}
         endTimeStr={data.endTimeStr}
+        effectiveEndMs={imputation.effectiveEndMs}
+        isClampedToLastData={imputation.isClampedToLastData}
         auditNotes={imputation.imputationAuditNotes}
         setAuditNotes={imputation.setImputationAuditNotes}
         handleApplyGapImputation={imputation.handleApplyImputation}

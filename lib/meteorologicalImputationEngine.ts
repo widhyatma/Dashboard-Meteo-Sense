@@ -798,6 +798,72 @@ function fillSubGapsInPredicted(
 const COMPANION_MAX_GAP_MS = 15 * 60 * 1000;
 const MODEL_MAX_GAP_MS = 180 * 60 * 1000;
 
+export interface EffectiveImputationEndResult {
+  effectiveEndTs: number;
+  wasClampedToLastData: boolean;
+  wasClampedToNow: boolean;
+  lastObservationTs: number | null;
+}
+
+/**
+ * Menentukan batas akhir efektif untuk imputasi celah data.
+ * Jika rentang target mencakup hari ini / masa depan (endTs > nowMs atau isOngoingTodayRange = true),
+ * batas akhir dibatasi ke timestamp observasi terakhir yang tersedia pada [startTs, endTs]
+ * (atau nowMs jika belum ada observasi), sehingga mencegah fabrikasi data masa depan dan
+ * ekstrapolasi terbuka melewati data terakhir.
+ */
+export function resolveEffectiveImputationEndTs(
+  startTs: number,
+  endTs: number,
+  targetRecords: Array<{ timestamp: number; [key: string]: any }>,
+  nowMs: number = Date.now(),
+  isOngoingTodayRange: boolean = endTs > nowMs
+): EffectiveImputationEndResult {
+  const startMinute = Math.floor(startTs / 60000) * 60000;
+  const endMinute = Math.floor(endTs / 60000) * 60000;
+
+  let lastSnappedTs: number | null = null;
+  for (let i = 0; i < targetRecords.length; i++) {
+    const r = targetRecords[i];
+    if (!Number.isFinite(r.timestamp)) continue;
+    const snapped = Math.round(r.timestamp / 60000) * 60000;
+    if (snapped >= startMinute && snapped <= endMinute) {
+      if (lastSnappedTs === null || snapped > lastSnappedTs) {
+        lastSnappedTs = snapped;
+      }
+    }
+  }
+
+  const shouldClamp = isOngoingTodayRange || endTs > nowMs;
+  if (!shouldClamp) {
+    return {
+      effectiveEndTs: endTs,
+      wasClampedToLastData: false,
+      wasClampedToNow: false,
+      lastObservationTs: lastSnappedTs,
+    };
+  }
+
+  if (lastSnappedTs !== null) {
+    const clampedEnd = Math.min(endMinute, lastSnappedTs);
+    return {
+      effectiveEndTs: clampedEnd,
+      wasClampedToLastData: clampedEnd < endMinute,
+      wasClampedToNow: false,
+      lastObservationTs: lastSnappedTs,
+    };
+  }
+
+  const nowMinute = Math.max(startMinute, Math.floor(nowMs / 60000) * 60000);
+  const clampedToNow = Math.min(endTs, nowMinute);
+  return {
+    effectiveEndTs: clampedToNow,
+    wasClampedToLastData: false,
+    wasClampedToNow: clampedToNow < endTs,
+    lastObservationTs: null,
+  };
+}
+
 /**
  * 5. Mesin Imputasi Celah Terpadu (Universal Gap Imputer Orchestrator)
  */

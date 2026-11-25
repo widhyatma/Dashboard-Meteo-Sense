@@ -59,6 +59,8 @@ export interface GapImputationPanelProps {
   isFilterDirty: boolean;
   setShowImputationConfirmModal: (show: boolean) => void;
   selectedVar: WeatherVarMeta;
+  effectiveEndMs?: number;
+  isClampedToLastData?: boolean;
 }
 
 export function GapImputationPanel({
@@ -87,6 +89,8 @@ export function GapImputationPanel({
   isFilterDirty,
   setShowImputationConfirmModal,
   selectedVar,
+  effectiveEndMs,
+  isClampedToLastData,
 }: GapImputationPanelProps) {
   return (
     <div className="space-y-6">
@@ -101,7 +105,9 @@ export function GapImputationPanel({
               {imputationResult.summary.totalExpectedMinutes.toLocaleString("id-ID")} Menit
             </div>
             <span className="text-[10px] text-slate-400 mt-0.5 block">
-              Resolusi Kontinu 1-Menit (1440/hari)
+              {isClampedToLastData && effectiveEndMs
+                ? `s/d Data Terakhir (${getWibTimeComponents(effectiveEndMs).timeFormatted.slice(0, 5)} WIB)`
+                : "Resolusi Kontinu 1-Menit (1440/hari)"}
             </span>
           </CardContent>
         </Card>

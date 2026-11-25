@@ -13,7 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { WeatherVarMeta } from "./types";
+import { WeatherVarMeta, formatWibYmd } from "./types";
+import { getWibTimeComponents } from "@/lib/meteorologicalImputationEngine";
 
 export interface ImputationConfirmModalProps {
   showImputationConfirmModal: boolean;
@@ -33,6 +34,8 @@ export interface ImputationConfirmModalProps {
   startTimeStr: string;
   endDateStr: string;
   endTimeStr: string;
+  effectiveEndMs?: number;
+  isClampedToLastData?: boolean;
   auditNotes: string;
   setAuditNotes: (notes: string) => void;
   handleApplyGapImputation: () => Promise<void>;
@@ -52,6 +55,8 @@ export function ImputationConfirmModal({
   startTimeStr,
   endDateStr,
   endTimeStr,
+  effectiveEndMs,
+  isClampedToLastData,
   auditNotes,
   setAuditNotes,
   handleApplyGapImputation,
@@ -98,7 +103,11 @@ export function ImputationConfirmModal({
               <span className="text-slate-500">Rentang Waktu:</span>
               <span>
                 {loadedContext
-                  ? `${loadedContext.startDateStr} ${loadedContext.startTimeStr} s/d ${loadedContext.endDateStr} ${loadedContext.endTimeStr}`
+                  ? `${loadedContext.startDateStr} ${loadedContext.startTimeStr} s/d ${
+                      isClampedToLastData && effectiveEndMs
+                        ? `${formatWibYmd(effectiveEndMs)} ${getWibTimeComponents(effectiveEndMs).timeFormatted.slice(0, 5)}`
+                        : `${loadedContext.endDateStr} ${loadedContext.endTimeStr}`
+                    }`
                   : `${startDateStr} ${startTimeStr} s/d ${endDateStr} ${endTimeStr}`}{" "}
                 WIB
               </span>

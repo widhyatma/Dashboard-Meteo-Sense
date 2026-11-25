@@ -5,10 +5,13 @@ import {
   WeatherVarMeta,
   LoadedDataContext,
   formatWibShortDateTime,
+  formatWibYmd,
+  getTodayWibDateStr,
 } from "@/components/koreksi-data/types";
 import {
   runUniversalGapImputation,
   buildCompleteGapNodePayloads,
+  resolveEffectiveImputationEndTs,
   ImputationSummary,
   ImputedGridPoint,
   getWibTimeComponents,
@@ -68,6 +71,30 @@ export function useGapImputation({
     }
   }, []);
 
+  // Resolve effective end boundary: if target range includes today or future, clamp to last real observation
+  const endBoundary = useMemo(() => {
+    if (!loadedContext) {
+      return {
+        effectiveEndTs: 0,
+        wasClampedToLastData: false,
+        wasClampedToNow: false,
+        lastObservationTs: null as number | null,
+      };
+    }
+    const nowMs = Date.now();
+    const todayWib = getTodayWibDateStr();
+    const isOngoingTodayRange =
+      loadedContext.endMs > nowMs ||
+      (loadedContext.endDateStr >= todayWib && loadedContext.endTimeStr === "23:59");
+    return resolveEffectiveImputationEndTs(
+      loadedContext.startMs,
+      loadedContext.endMs,
+      rawRecords,
+      nowMs,
+      isOngoingTodayRange
+    );
+  }, [loadedContext, rawRecords]);
+
   // Compute Universal Gap Imputation Result
   const imputationResult = useMemo<{ grid: ImputedGridPoint[]; summary: ImputationSummary }>(() => {
     if (!loadedContext || !sensorId) {
@@ -90,7 +117,7 @@ export function useGapImputation({
     }
 
     const startTs = loadedContext.startMs;
-    const endTs = loadedContext.endMs;
+    const endTs = endBoundary.effectiveEndTs;
 
     return runUniversalGapImputation(
       rawRecords,
@@ -113,6 +140,7 @@ export function useGapImputation({
   }, [
     rawRecords,
     loadedContext,
+    endBoundary.effectiveEndTs,
     sensorId,
     selectedVar.key,
     gapMicroLimitMinutes,
@@ -261,11 +289,12 @@ export function useGapImputation({
     try {
       setIsApplyingImputation(true);
 
+      const effectiveEndMs = endBoundary.effectiveEndTs || loadedContext.endMs;
       const nodePayloads = buildCompleteGapNodePayloads(
         imputationResult.grid,
         rawRecords,
         loadedContext.startMs,
-        loadedContext.endMs,
+        effectiveEndMs,
         selectedVar.key,
         {
           microGapLimitMinutes: gapMicroLimitMinutes,
@@ -284,7 +313,10 @@ export function useGapImputation({
       const writtenNodes = await batchWriteGapImputedNodes(sensorId, nodePayloads);
 
       const startEpoch = Math.floor(loadedContext.startMs / 1000);
-      const endEpoch = Math.floor(loadedContext.endMs / 1000);
+      const endEpoch = Math.floor(effectiveEndMs / 1000);
+      const effectiveEndDateFormatted = endBoundary.wasClampedToLastData
+        ? `${formatWibYmd(effectiveEndMs)} ${getWibTimeComponents(effectiveEndMs).timeFormatted.slice(0, 5)} WIB`
+        : `${loadedContext.endDateStr} ${loadedContext.endTimeStr} WIB`;
 
       await logSensorCorrection({
         sensorId,
@@ -296,7 +328,7 @@ export function useGapImputation({
           start: startEpoch,
           end: endEpoch,
           startDateFormatted: `${loadedContext.startDateStr} ${loadedContext.startTimeStr} WIB`,
-          endDateFormatted: `${loadedContext.endDateStr} ${loadedContext.endTimeStr} WIB`,
+          endDateFormatted: effectiveEndDateFormatted,
         },
         parameters: {
           microGapLimit: gapMicroLimitMinutes,
@@ -357,6 +389,9 @@ export function useGapImputation({
     imputationAuditNotes,
     setImputationAuditNotes,
     imputationResult,
+    effectiveEndMs: endBoundary.effectiveEndTs,
+    isClampedToLastData: endBoundary.wasClampedToLastData,
+    lastObservationTs: endBoundary.lastObservationTs,
     gapChartOptions,
     handleApplyImputation,
   };
