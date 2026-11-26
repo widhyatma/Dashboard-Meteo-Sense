@@ -223,9 +223,10 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
         },
         legend: {
           bottom: 0,
+          type: "scroll",
           textStyle: { color: textColor, fontSize: 11 },
         },
-        grid: { left: "4%", right: "4%", top: "8%", bottom: "14%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 56, containLabel: true },
         xAxis: {
           type: "category",
           data: months,
@@ -325,8 +326,8 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
             return res;
           },
         },
-        legend: { bottom: 0, textStyle: { color: textColor, fontSize: 11 } },
-        grid: { left: "4%", right: "4%", top: "8%", bottom: "14%", containLabel: true },
+        legend: { bottom: 0, type: "scroll", textStyle: { color: textColor, fontSize: 11 } },
+        grid: { left: 16, right: 16, top: 48, bottom: 56, containLabel: true },
         xAxis: {
           type: "category",
           data: months,
@@ -425,8 +426,8 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
             return res;
           },
         },
-        legend: { bottom: 0, textStyle: { color: textColor, fontSize: 11 } },
-        grid: { left: "4%", right: "4%", top: "8%", bottom: "14%", containLabel: true },
+        legend: { bottom: 0, type: "scroll", textStyle: { color: textColor, fontSize: 11 } },
+        grid: { left: 16, right: 16, top: 48, bottom: 56, containLabel: true },
         xAxis: {
           type: "category",
           data: months,
@@ -588,10 +589,11 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
         },
         legend: {
           bottom: 0,
+          type: "scroll",
           textStyle: { color: textColor, fontSize: 11 },
           data: ["Suhu Udara Diurnal", "Kelembaban Relatif Diurnal"],
         },
-        grid: { left: "4%", right: "4%", top: "8%", bottom: "14%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 56, containLabel: true },
         xAxis: {
           type: "category",
           data: hours,
@@ -667,8 +669,8 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
             return res;
           },
         },
-        legend: { bottom: 0, textStyle: { color: textColor, fontSize: 11 } },
-        grid: { left: "4%", right: "4%", top: "8%", bottom: "14%", containLabel: true },
+        legend: { bottom: 0, type: "scroll", textStyle: { color: textColor, fontSize: 11 } },
+        grid: { left: 16, right: 16, top: 48, bottom: 56, containLabel: true },
         xAxis: {
           type: "category",
           data: hours,
@@ -1041,7 +1043,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
             }
           },
         },
-        grid: { left: "4%", right: "4%", top: "12%", bottom: "14%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 52, containLabel: true },
         xAxis: {
           type: "category",
           data: monthNames,
@@ -1126,7 +1128,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
             `;
           },
         },
-        grid: { left: "4%", right: "6%", top: "12%", bottom: "14%", containLabel: true },
+        grid: { left: 16, right: 20, top: 52, bottom: 52, containLabel: true },
         xAxis: {
           type: "value",
           name: `${paramLabel} (${unit})`,
@@ -1172,7 +1174,15 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                 {
                   yAxis: 25,
                   lineStyle: { color: "#38bdf8", type: "dashed", width: 1.5 },
-                  label: { formatter: "P25 (Q1: 25%)", position: "insideEndTop", fontSize: 10, color: "#38bdf8" },
+                  label: {
+                    formatter: "P25 (Q1: 25%)",
+                    position: "insideEndTop",
+                    fontSize: 10,
+                    color: "#38bdf8",
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                    padding: [2, 5],
+                    borderRadius: 4,
+                  },
                 },
                 {
                   yAxis: 50,
@@ -1183,22 +1193,36 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     fontSize: 10,
                     color: "#6366f1",
                     fontWeight: "bold",
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                    padding: [2, 5],
+                    borderRadius: 4,
                   },
                 },
                 {
                   yAxis: 75,
                   lineStyle: { color: "#f59e0b", type: "dashed", width: 1.5 },
-                  label: { formatter: "P75 (Q3: 75%)", position: "insideEndTop", fontSize: 10, color: "#f59e0b" },
+                  label: {
+                    formatter: "P75 (Q3: 75%)",
+                    position: "insideEndTop",
+                    fontSize: 10,
+                    color: "#f59e0b",
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                    padding: [2, 5],
+                    borderRadius: 4,
+                  },
                 },
                 {
                   yAxis: 95,
                   lineStyle: { color: "#ef4444", type: "dashed", width: 2 },
                   label: {
                     formatter: "P95 (Ambang Ekstrem WMO: 95%)",
-                    position: "insideEndTop",
+                    position: "insideStartBottom",
                     fontSize: 10,
                     color: "#ef4444",
                     fontWeight: "bold",
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                    padding: [2, 5],
+                    borderRadius: 4,
                   },
                 },
                 {
@@ -1210,6 +1234,9 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     fontSize: 10,
                     color: "#b91c1c",
                     fontWeight: "bold",
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                    padding: [2, 5],
+                    borderRadius: 4,
                   },
                 },
               ],
@@ -1223,13 +1250,13 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                       coord: [pVals.p50, 50],
                       value: `P50: ${pVals.p50}`,
                       itemStyle: { color: "#6366f1" },
-                      label: { position: "right", color: textColor, fontSize: 10, fontWeight: "bold" },
+                      label: { position: "bottom", color: textColor, fontSize: 10, fontWeight: "bold" },
                     },
                     {
                       coord: [pVals.p95, 95],
                       value: `P95: ${pVals.p95}`,
                       itemStyle: { color: "#ef4444" },
-                      label: { position: "left", color: textColor, fontSize: 10, fontWeight: "bold" },
+                      label: { position: "bottom", color: textColor, fontSize: 10, fontWeight: "bold" },
                     },
                   ],
                 }
@@ -1314,9 +1341,10 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
         legend: {
           data: ["Median (P50)", "Rentang IQR (P25–P75)", "Rentang Iklim (P5–P95)", "Rekor Maksimum", "Rekor Minimum"],
           textStyle: { color: textColor, fontSize: 11 },
-          top: "2%",
+          bottom: 0,
+          type: "scroll",
         },
-        grid: { left: "4%", right: "4%", top: "14%", bottom: "14%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 58, containLabel: true },
         xAxis: {
           type: "category",
           data: monthNames,
@@ -1441,7 +1469,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     </div>`;
           },
         },
-        grid: { left: "4%", right: "4%", top: "10%", bottom: "16%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 58, containLabel: true },
         xAxis: {
           type: "category",
           data: categories,
@@ -1508,7 +1536,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     </div>`;
           },
         },
-        grid: { left: "4%", right: "4%", top: "10%", bottom: "16%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 58, containLabel: true },
         xAxis: {
           type: "category",
           data: categories,
@@ -1574,7 +1602,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     </div>`;
           },
         },
-        grid: { left: "4%", right: "4%", top: "10%", bottom: "16%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 58, containLabel: true },
         xAxis: {
           type: "category",
           data: categories,
@@ -1645,7 +1673,7 @@ export const Era5ClimatologyCharts: React.FC<Era5ClimatologyChartsProps> = ({
                     </div>`;
           },
         },
-        grid: { left: "4%", right: "4%", top: "10%", bottom: "18%", containLabel: true },
+        grid: { left: 16, right: 16, top: 48, bottom: 64, containLabel: true },
         xAxis: {
           type: "category",
           data: categories,

@@ -239,41 +239,37 @@ export default function OverviewWorkspace({ ws }: OverviewWorkspaceProps) {
       />
 
       {/* ── 3. BIOKLIMATOLOGI: WALTER-LIETH & KLASIFIKASI IKLIM ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Walter-Lieth Climograph */}
-        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm overflow-hidden">
-          <CardContent className="p-4 sm:p-5">
-            {isWmoNormalsLoading && !wmoNormalsData ? (
-              <div className="h-80 flex flex-col items-center justify-center gap-2">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-xs text-slate-400">Menghitung Klimograf Walter-Lieth 30-tahun...</span>
-              </div>
-            ) : (
-              <WalterLiethClimograph
-                normals={wmoNormalsData?.normals || null}
-                stationName={activeLocation.name}
-                isDarkMode={isDarkMode}
-              />
-            )}
-          </CardContent>
-        </Card>
+      <div className="space-y-6">
+        {/* Walter-Lieth Climograph (Full Width tanpa double Card wrapper) */}
+        {isWmoNormalsLoading && !wmoNormalsData ? (
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm">
+            <CardContent className="p-6 h-96 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+              <span className="text-xs text-slate-400">Menghitung Klimograf Walter-Lieth 30-tahun...</span>
+            </CardContent>
+          </Card>
+        ) : (
+          <WalterLiethClimograph
+            normals={wmoNormalsData?.normals || null}
+            stationName={activeLocation.name}
+            isDarkMode={isDarkMode}
+          />
+        )}
 
-        {/* Climate Classification Card */}
-        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm overflow-hidden">
-          <CardContent className="p-4 sm:p-5">
-            {isWmoNormalsLoading && !wmoNormalsData ? (
-              <div className="h-80 flex flex-col items-center justify-center gap-2">
-                <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-                <span className="text-xs text-slate-400">Memuat Taksonomi Iklim Oldeman &amp; Köppen...</span>
-              </div>
-            ) : (
-              <ClimateClassificationCard
-                classification={wmoNormalsData?.classification || null}
-                isDarkMode={isDarkMode}
-              />
-            )}
-          </CardContent>
-        </Card>
+        {/* Climate Classification Cards (Full Width agar 3-kolom Oldeman/SF/Koppen lega) */}
+        {isWmoNormalsLoading && !wmoNormalsData ? (
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm">
+            <CardContent className="p-6 h-72 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
+              <span className="text-xs text-slate-400">Memuat Taksonomi Iklim Oldeman &amp; Köppen...</span>
+            </CardContent>
+          </Card>
+        ) : (
+          <ClimateClassificationCard
+            classification={wmoNormalsData?.classification || null}
+            isDarkMode={isDarkMode}
+          />
+        )}
       </div>
     </div>
   );

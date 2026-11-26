@@ -263,8 +263,9 @@ export const RainfallCharts: React.FC<RainfallChartsProps> = ({
         data: legendData,
         textStyle: { color: textColor },
         bottom: 0,
+        type: "scroll",
       },
-      grid: { left: "3%", right: "4%", top: "8%", bottom: "12%", containLabel: true },
+      grid: { left: 16, right: 16, top: 52, bottom: 58, containLabel: true },
       xAxis: {
         type: "category",
         data: xAxisLabels,

@@ -84,3 +84,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Shoulder Buffer Relaxation for Baseline Interpolation**:
   - When reconstructing anomaly segments via diurnal patterns (`solar_cosine_hermite`), expand the anomaly window dynamically until excess over baseline relaxes ($\Delta T \le 0.25^\circ\text{C}$).
   - Boundary anchors $(t_A, y_A)$ and $(t_B, y_B)$ must never be sampled from already-heated transition flanks.
+
+### 10. Chart Library Preservation, Bundler Native Modules, & Windows Launcher Invariants
+- **Preserve Existing Chart Engines on Migration**:
+  - Never silently swap or rewrite an existing visualization component's rendering engine (e.g. Plotly in `ChartComponent.tsx` for Basis Data & Reanalysis) during refactoring or offline app extraction unless explicitly requested by the user.
+- **Windows Batch Launchers (`.bat`)**:
+  - Any `.bat` launcher created on Windows MUST use Windows **CRLF (`\r\n`)** line endings (never bare LF `\n`), escape parentheses inside `echo` (`^(...^)`), and use `ping -n 3 127.0.0.1 >nul` instead of `timeout` when launching browsers so double-clicking in Explorer or subshells never crashes with syntax/redirection errors.
+- **Next.js Webpack Native Built-ins (`node:sqlite`)**:
+  - Import Node built-ins directly via `import { DatabaseSync } from "node:sqlite"` rather than dynamic `createRequire(path.resolve(...))` inside webpack-bundled routes/libs so server bundles resolve reliably offline without fallback failures.

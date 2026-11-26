@@ -44,12 +44,42 @@ export function WalterLiethClimograph({
 
     const tempToY = (t: number): number => Number((t * 2).toFixed(2));
 
+    const maxRainPlot = rains.length > 0 ? Math.max(...rains.map(rainToY)) : 100;
+    const maxTempPlot = temps.length > 0 ? Math.max(...temps.map(tempToY)) : 60;
+    const maxPlotY = Math.max(180, Math.ceil(Math.max(maxRainPlot, maxTempPlot) / 20) * 20);
+    const labelPillBg = isDarkMode ? "rgba(15, 23, 42, 0.86)" : "rgba(255, 255, 255, 0.90)";
+
     // Identifikasi rentang bulan arid (P < 2T) untuk penanda visual standar Walter-Lieth
     const aridMonthIndices = normals.monthly
       .map((m, idx) => (m.precipMean < m.tempMean * 2 ? idx : -1))
       .filter((idx) => idx !== -1);
 
     const markAreaPieces: any[] = [];
+    const buildAridPiece = (startIdx: number, endIdx: number) => [
+      {
+        name: "Periode Arid",
+        xAxis: months[startIdx],
+        itemStyle: {
+          color: isDarkMode ? "rgba(245, 158, 11, 0.16)" : "rgba(245, 158, 11, 0.18)",
+        },
+        label: {
+          show: true,
+          formatter: "Arid (P < 2T)",
+          position: "insideBottom",
+          distance: 8,
+          color: isDarkMode ? "#fcd34d" : "#b45309",
+          fontSize: 10,
+          fontWeight: "bold",
+          backgroundColor: labelPillBg,
+          padding: [2, 6],
+          borderRadius: 4,
+        },
+      },
+      {
+        xAxis: months[endIdx],
+      },
+    ];
+
     if (aridMonthIndices.length > 0) {
       let runStart = aridMonthIndices[0];
       let runEnd = aridMonthIndices[0];
@@ -58,50 +88,12 @@ export function WalterLiethClimograph({
         if (aridMonthIndices[i] === runEnd + 1) {
           runEnd = aridMonthIndices[i];
         } else {
-          markAreaPieces.push([
-            {
-              name: "Periode Arid",
-              xAxis: months[runStart],
-              itemStyle: {
-                color: isDarkMode ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.18)",
-              },
-              label: {
-                show: true,
-                formatter: "Periode Arid (P < 2T)",
-                position: "insideTop",
-                color: isDarkMode ? "#fcd34d" : "#b45309",
-                fontSize: 10,
-                fontWeight: "bold",
-              },
-            },
-            {
-              xAxis: months[runEnd],
-            },
-          ]);
+          markAreaPieces.push(buildAridPiece(runStart, runEnd));
           runStart = aridMonthIndices[i];
           runEnd = aridMonthIndices[i];
         }
       }
-      markAreaPieces.push([
-        {
-          name: "Periode Arid",
-          xAxis: months[runStart],
-          itemStyle: {
-            color: isDarkMode ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.18)",
-          },
-          label: {
-            show: true,
-            formatter: "Periode Arid (P < 2T)",
-            position: "insideTop",
-            color: isDarkMode ? "#fcd34d" : "#b45309",
-            fontSize: 10,
-            fontWeight: "bold",
-          },
-        },
-        {
-          xAxis: months[runEnd],
-        },
-      ]);
+      markAreaPieces.push(buildAridPiece(runStart, runEnd));
     }
 
     return {
@@ -165,29 +157,31 @@ export function WalterLiethClimograph({
       legend: {
         data: ["Curah Hujan (P)", "Suhu Udara (T) & Ambang 2T"],
         textStyle: { color: textColor, fontSize: 11 },
-        top: "2%",
+        bottom: 2,
+        itemGap: 20,
       },
       grid: {
-        left: "5%",
-        right: "6%",
-        bottom: "12%",
-        top: "18%",
+        left: 16,
+        right: 16,
+        bottom: 48,
+        top: 50,
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: months,
         axisLine: { lineStyle: { color: textColor } },
-        axisLabel: { color: textColor, fontWeight: "bold" },
+        axisLabel: { color: textColor, fontWeight: "bold", margin: 10 },
         splitLine: { show: true, lineStyle: { color: gridColor, type: "dashed" } },
       },
       yAxis: [
         {
           type: "value",
           name: "Curah Hujan (mm)",
-          nameTextStyle: { color: "#0284c7", fontWeight: "bold" },
+          nameGap: 14,
+          nameTextStyle: { color: "#0284c7", fontWeight: "bold", fontSize: 11, align: "left" },
           min: 0,
-          max: 180,
+          max: maxPlotY,
           interval: 20,
           position: "left",
           axisLine: { show: true, lineStyle: { color: "#0284c7" } },
@@ -204,10 +198,11 @@ export function WalterLiethClimograph({
         },
         {
           type: "value",
-          name: "Suhu Udara (°C) [1°C = 2 mm]",
-          nameTextStyle: { color: "#ef4444", fontWeight: "bold" },
+          name: "Suhu (°C) [1°C = 2 mm]",
+          nameGap: 14,
+          nameTextStyle: { color: "#ef4444", fontWeight: "bold", fontSize: 11, align: "right" },
           min: 0,
-          max: 180,
+          max: maxPlotY,
           interval: 20,
           position: "right",
           axisLine: { show: true, lineStyle: { color: "#ef4444" } },
@@ -266,10 +261,14 @@ export function WalterLiethClimograph({
                 lineStyle: { color: "#0284c7", type: "solid", width: 1.5 },
                 label: {
                   formatter: "Batas Per-Humid Walter-Lieth (100 mm) · Skala Kompresi 1:5",
-                  position: "insideEndTop",
+                  position: "insideStartTop",
+                  distance: [4, 4],
                   fontSize: 10,
                   fontWeight: "bold",
                   color: "#0284c7",
+                  backgroundColor: labelPillBg,
+                  padding: [2, 6],
+                  borderRadius: 4,
                 },
               },
               {
@@ -277,9 +276,14 @@ export function WalterLiethClimograph({
                 lineStyle: { color: "#f59e0b", type: "dotted", width: 1.5 },
                 label: {
                   formatter: "Bulan Kering Mohr / SF (60 mm)",
-                  position: "insideEndBottom",
+                  position: "insideEndTop",
+                  distance: [4, 4],
                   fontSize: 10,
-                  color: "#f59e0b",
+                  fontWeight: "bold",
+                  color: isDarkMode ? "#fbbf24" : "#b45309",
+                  backgroundColor: labelPillBg,
+                  padding: [2, 6],
+                  borderRadius: 4,
                 },
               },
             ],
@@ -336,7 +340,7 @@ export function WalterLiethClimograph({
           </div>
 
           {/* Metadata Stasiun Box ala Walter-Lieth */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700 text-xs shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700 text-xs shadow-xs shrink-0 lg:min-w-[360px]">
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
                 <Compass className="h-3 w-3 text-blue-500" /> Posisi
@@ -378,7 +382,7 @@ export function WalterLiethClimograph({
 
       <CardContent className="p-4 space-y-4">
         {/* Main Climograph Chart */}
-        <div className="h-[370px] w-full">
+        <div className="h-[390px] sm:h-[430px] w-full">
           <ReactECharts
             option={chartOption}
             style={{ height: "100%", width: "100%" }}

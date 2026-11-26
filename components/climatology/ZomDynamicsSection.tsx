@@ -74,10 +74,10 @@ export function ZomDynamicsSection({
         },
       },
       grid: {
-        left: "4%",
-        right: "4%",
-        bottom: "16%",
-        top: "14%",
+        left: 16,
+        right: 16,
+        bottom: 64,
+        top: 54,
         containLabel: true,
       },
       xAxis: {
@@ -125,9 +125,12 @@ export function ZomDynamicsSection({
                 lineStyle: { color: "#ef4444", type: "dashed", width: 1.5 },
                 label: {
                   formatter: "Ambang Batas Musim BMKG (50 mm)",
-                  position: "insideEndTop",
+                  position: "insideStartTop",
                   fontSize: 10,
                   color: "#ef4444",
+                  backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+                  padding: [2, 6],
+                  borderRadius: 4,
                 },
               },
             ],
