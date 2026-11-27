@@ -94,24 +94,28 @@ body {
   background-color: #ffffff;
 }
 
-/* width */
+/* Default subtle thin neutral gray scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
-/* Track */
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
-/* Handle */
 ::-webkit-scrollbar-thumb {
-  background: #00a0e1;
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 9999px;
 }
 
-/* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-  background: #0077b6;
+  background: rgba(100, 116, 139, 0.7);
 }
 
 .warming-stripes {
