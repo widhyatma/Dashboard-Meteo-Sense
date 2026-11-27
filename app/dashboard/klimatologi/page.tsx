@@ -77,20 +77,20 @@ function ClimatologyWorkspaceContent() {
   const ws = useClimatologyWorkspace();
 
   return (
-    <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950/60 pb-16">
-      {/* 1. Compact Sticky Control Bar */}
+    <div className="-mx-3 sm:-mx-6 lg:-mx-8 -mt-4 sm:-mt-6 min-h-screen bg-slate-50/60 dark:bg-slate-950/60 pb-16">
+      {/* 1. Compact Sticky Control Bar flush under topbar */}
       <ClimatologyStickyBar ws={ws} />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-5 space-y-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-5 space-y-6">
         {/* 2. Compact Modern Header Banner */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 pb-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+              <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 shrink-0">
                 <Sparkles className="h-5 w-5" />
               </span>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Klimatologi & Dinamika Iklim
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
+                Klimatologi &amp; Dinamika Iklim
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -99,12 +99,12 @@ function ClimatologyWorkspaceContent() {
           </div>
 
           {/* Location Chip */}
-          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-2xs self-start sm:self-auto">
-            <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse" />
-            <span className="font-medium text-slate-800 dark:text-slate-200">
+          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-2xs self-start sm:self-auto shrink-0 max-w-full">
+            <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse shrink-0" />
+            <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[180px] sm:max-w-[240px]">
               {ws.activeLocation.name}
             </span>
-            <span className="text-slate-400">
+            <span className="text-slate-400 font-mono shrink-0">
               ({ws.activeCoords.lat.toFixed(2)}°, {ws.activeCoords.lng.toFixed(2)}°)
             </span>
           </div>
@@ -116,8 +116,8 @@ function ClimatologyWorkspaceContent() {
           onValueChange={(val) => ws.setActiveTab(val as ClimatologyWorkspaceTab)}
           className="w-full space-y-5"
         >
-          <div className="overflow-x-auto no-scrollbar pb-1">
-            <TabsList className="bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-xl h-auto gap-1 inline-flex min-w-full sm:min-w-0">
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="bg-slate-200/70 dark:bg-slate-800/70 p-1 rounded-xl h-auto gap-1 inline-flex flex-nowrap sm:flex-wrap w-max sm:w-auto">
               <TabsTrigger
                 value="ringkasan"
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-xs transition"
@@ -165,7 +165,7 @@ function ClimatologyWorkspaceContent() {
             {ws.activeTab === "agroklimat" && <AgrometWorkspace ws={ws} />}
           </div>
         </Tabs>
-      </main>
+      </div>
     </div>
   );
 }

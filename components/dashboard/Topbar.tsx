@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation" // Added for pathname detection
 import { Button } from "@/components/ui/button"
 import { ThemeSwitch } from "@/components/theme-switch"
-import { Menu, Search, Settings, LogOut, User } from "lucide-react"
+import { Menu, Search, Settings, LogOut, User, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import type { User as FirebaseUser } from "firebase/auth"
 import type { UserProfile } from "@/hooks/useAuth"
 import {
@@ -23,16 +23,26 @@ interface TopbarProps {
   setSidebarOpen: (open: boolean) => void
   handleLogout: () => void
   navigation: Array<{ name: string; href: string; icon: React.ElementType }> // Add navigation prop
+  sidebarCollapsed?: boolean
+  onToggleSidebarCollapse?: () => void
 }
 
-export function Topbar({ user, profile, setSidebarOpen, handleLogout, navigation }: TopbarProps) {
+export function Topbar({
+  user,
+  profile,
+  setSidebarOpen,
+  handleLogout,
+  navigation,
+  sidebarCollapsed = false,
+  onToggleSidebarCollapse,
+}: TopbarProps) {
   const pathname = usePathname() // Get current pathname
   
   // Find the current page name based on pathname
   const currentPage = navigation.find(item => item.href === pathname)?.name || "Dashboard"
   
   return (
-    <header className="sticky top-0 z-30 w-full bg-white dark:bg-slate-900 shadow-sm">
+    <header className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200/70 dark:border-slate-800/80">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center space-x-3">
           {/* Mobile menu button */}
@@ -45,6 +55,21 @@ export function Topbar({ user, profile, setSidebarOpen, handleLogout, navigation
             <Menu className="h-5 w-5" />
             <span className="sr-only">Open sidebar</span>
           </Button>
+
+          {/* Desktop sidebar collapse toggle */}
+          {onToggleSidebarCollapse && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex h-9 w-9 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              onClick={onToggleSidebarCollapse}
+              title={sidebarCollapsed ? "Perluas Sidebar (Ctrl+B)" : "Ciutkan Sidebar (Ctrl+B)"}
+              aria-label={sidebarCollapsed ? "Perluas Sidebar" : "Ciutkan Sidebar"}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </Button>
+          )}
           
           {/* Logo - both mobile and desktop */}
           <div className="flex items-center gap-3">

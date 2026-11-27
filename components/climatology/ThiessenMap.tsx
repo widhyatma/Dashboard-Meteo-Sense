@@ -179,7 +179,7 @@ export function ThiessenMap({
   return (
     <div
       ref={containerRef}
-      className={`relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-md ${
+      className={`relative isolate rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-md ${
         isFullscreen
           ? "fixed inset-0 z-[9999] w-screen h-screen rounded-none border-none bg-slate-950"
           : "w-full h-[520px] lg:h-[580px] bg-slate-100 dark:bg-slate-900"

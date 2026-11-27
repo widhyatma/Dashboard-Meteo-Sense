@@ -161,10 +161,10 @@ export function WalterLiethClimograph({
         itemGap: 20,
       },
       grid: {
-        left: 16,
-        right: 16,
+        left: 20,
+        right: 20,
         bottom: 48,
-        top: 50,
+        top: 56,
         containLabel: true,
       },
       xAxis: {
@@ -340,7 +340,7 @@ export function WalterLiethClimograph({
           </div>
 
           {/* Metadata Stasiun Box ala Walter-Lieth */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700 text-xs shadow-xs shrink-0 lg:min-w-[360px]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700 text-xs shadow-xs shrink-0 w-full lg:w-auto lg:min-w-[320px]">
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
                 <Compass className="h-3 w-3 text-blue-500" /> Posisi

@@ -309,16 +309,16 @@ export function DesignRainfallSection({
     <div className="space-y-6">
       {/* ─── Top Control Bar: Pemilihan Stasiun & Mode Data ──────────────────── */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
-        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-2">
+        <CardContent className="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            <div className="flex items-center gap-2 shrink-0">
               <CloudRain className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                 Stasiun Analisis:
               </span>
             </div>
             <Select value={selectedStationId} onValueChange={setSelectedStationId}>
-              <SelectTrigger className="w-full sm:w-[280px] h-9 text-xs font-medium">
+              <SelectTrigger className="w-full sm:w-[250px] h-9 text-xs font-medium">
                 <SelectValue placeholder="Pilih Stasiun AWS Kebumen" />
               </SelectTrigger>
               <SelectContent>
@@ -330,13 +330,13 @@ export function DesignRainfallSection({
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-[11px] text-slate-500 whitespace-nowrap">Sumber Data:</span>
               <Select
                 value={dataSourceMode}
                 onValueChange={(val: any) => setDataSourceMode(val)}
               >
-                <SelectTrigger className="w-[200px] h-9 text-xs">
+                <SelectTrigger className="w-full sm:w-[195px] h-9 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -352,7 +352,7 @@ export function DesignRainfallSection({
           </div>
 
           {/* Action Export Buttons */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
             <Button
               variant="outline"
               size="sm"
@@ -401,7 +401,7 @@ export function DesignRainfallSection({
 
       {/* ─── Tab Modular Navigasi Ergonomis Anti-Long-Scroll ─────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 max-w-[420px] mb-4">
+        <TabsList className="grid grid-cols-3 w-full sm:w-auto sm:max-w-[440px] mb-4">
           <TabsTrigger value="ringkasan" className="text-xs">
             Curah Hujan Rencana
           </TabsTrigger>

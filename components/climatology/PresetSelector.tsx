@@ -22,6 +22,7 @@ interface PresetSelectorProps {
   setSelectedDasarian?: (val: number) => void;
   isLoading: boolean;
   onRefresh: () => void;
+  variant?: "default" | "compact";
 }
 
 const MONTHS = [
@@ -50,11 +51,93 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
   setSelectedDasarian,
   isLoading,
   onRefresh,
+  variant = "default",
 }) => {
   const years = useMemo(() => {
     const current = new Date().getUTCFullYear();
     return Array.from({ length: 5 }, (_, i) => current - i);
   }, []);
+
+  if (variant === "compact") {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Select value={preset} onValueChange={setPreset}>
+          <SelectTrigger
+            aria-label="Periode Klimatologi"
+            className="h-8 text-xs w-[132px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 font-medium"
+          >
+            <SelectValue placeholder="Periode" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="dasarian" className="text-xs">Dasarian</SelectItem>
+            <SelectItem value="monthly" className="text-xs">Bulanan</SelectItem>
+            <SelectItem value="yearly" className="text-xs">Tahunan</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {(preset === "monthly" || preset === "dasarian") && (
+          <Select
+            value={String(selectedMonth)}
+            onValueChange={(val) => setSelectedMonth(Number(val))}
+          >
+            <SelectTrigger
+              aria-label="Pilih Bulan"
+              className="h-8 text-xs w-[112px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 font-medium"
+            >
+              <SelectValue placeholder="Bulan" />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTHS.map((m) => (
+                <SelectItem key={m.value} value={String(m.value)} className="text-xs">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {(preset === "monthly" || preset === "dasarian" || preset === "yearly") && (
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(val) => setSelectedYear(Number(val))}
+          >
+            <SelectTrigger
+              aria-label="Pilih Tahun"
+              className="h-8 text-xs w-[84px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 font-medium"
+            >
+              <SelectValue placeholder="Tahun" />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)} className="text-xs">
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {preset === "dasarian" && selectedDasarian !== undefined && setSelectedDasarian && (
+          <Select
+            value={String(selectedDasarian)}
+            onValueChange={(val) => setSelectedDasarian(Number(val))}
+          >
+            <SelectTrigger
+              aria-label="Pilih Dasarian"
+              className="h-8 text-xs w-[132px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 font-medium"
+            >
+              <SelectValue placeholder="Dasarian" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1" className="text-xs">Dasarian I (1–10)</SelectItem>
+              <SelectItem value="2" className="text-xs">Dasarian II (11–20)</SelectItem>
+              <SelectItem value="3" className="text-xs">Dasarian III (21+)</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-4">
