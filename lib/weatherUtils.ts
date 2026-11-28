@@ -1,4 +1,5 @@
 import { SensorDate } from "@/lib/FetchingSensorData";
+import { computeCumulativeRainDeltaStep, RainStepInput } from "@/lib/rainCounterUtils";
 
 // --- TYPES ---
 export type WeatherRecord = {
@@ -90,81 +91,34 @@ export const formatDateTimeForDisplay = (date: Date): string => {
 
 // --- AGGREGATION LOGIC ---
 
-export function aggregateHourly(rows: SensorDate[]): HourlyRecord[] {
-  const MAX_RAINRATE_MM_HR = 300;  // Physical upper bound
-  const MAX_INTERVAL_SEC   = 1800; // 30-min gap — ignore long data gaps
-  const SENSOR_JITTER_THRESHOLD = 1.0; // mm (noise / 1-tip vibration tolerance)
-  const MAX_RESET_BASE = 5.0; // mm (max plausible counter value on daily reset)
-
-  // Sort globally first so delta computation is correct across hour boundaries
+function computeHourlyRainContribs(rows: SensorDate[]): Array<SensorDate & { _rainContrib: number }> {
   const sorted = [...rows].sort((a, b) => a.timestamp - b.timestamp);
+  const rainItems: RainStepInput[] = sorted.map((r) => ({
+    tsMs: r.timestamp,
+    rainfall: r.rainfall,
+    rainrate: r.rainrate,
+  }));
   let prevValidRainfall: number | null = null;
 
-  // Compute delta contribution for each reading:
-  // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
-  // We compute the positive delta (difference) between consecutive readings to obtain true physical precipitation.
-  // Pre-aggregated hourly inputs (marked by tempMax) already represent hourly totals, so _rainContrib = p.rainfall.
-  const withContrib = sorted.map((p, index) => {
-    // 0. Pre-aggregated hourly record: rainfall is already the accumulated delta for this hour
+  return sorted.map((p, index) => {
     if ((p as any).tempMax != null) {
       const r = Number(p.rainfall);
       return { ...p, _rainContrib: Number.isFinite(r) && r >= 0 ? r : 0 };
     }
-
-    let rainDelta = 0;
-
-    if (index > 0) {
-      const prev = sorted[index - 1];
-      const deltaSeconds = (p.timestamp - prev.timestamp) / 1000;
-
-      // 1. Primary: Cumulative rainfall counter delta
-      if (
-        p.rainfall != null && Number.isFinite(Number(p.rainfall)) &&
-        prevValidRainfall !== null
-      ) {
-        const curRf = Number(p.rainfall);
-        const prevRf = prevValidRainfall;
-        const diff = curRf - prevRf;
-
-        if (diff >= 0 && diff <= 50) {
-          // Normal accumulation within realistic physical limit per interval (<= 50 mm)
-          rainDelta = diff;
-          prevValidRainfall = curRf;
-        } else if (diff < 0) {
-          if (Math.abs(diff) <= SENSOR_JITTER_THRESHOLD) {
-            // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevValidRainfall
-            rainDelta = 0;
-          } else if (curRf >= 0 && curRf <= MAX_RESET_BASE) {
-            // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
-            rainDelta = curRf;
-            prevValidRainfall = curRf;
-          } else {
-            // Anomalous negative drop while counter remains high (> 5.0 mm): do NOT add curRf
-            rainDelta = 0;
-            prevValidRainfall = curRf;
-          }
-        }
-      } else if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
-        prevValidRainfall = Number(p.rainfall);
-      }
-      // 2. Secondary fallback: When rainfall counter is unavailable, integrate instantaneous rainrate
-      else if (deltaSeconds > 0 && deltaSeconds <= MAX_INTERVAL_SEC) {
-        const rr = Number(p.rainrate);
-        const validRR = Number.isFinite(rr) && rr >= 0 ? Math.min(rr, MAX_RAINRATE_MM_HR) : 0;
-        rainDelta = validRR * (deltaSeconds / 3600);
-      }
-    } else {
-      if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
-        const r0 = Number(p.rainfall);
-        if (r0 >= 0 && r0 <= 50) {
-          prevValidRainfall = r0;
-          rainDelta = r0 <= MAX_RESET_BASE ? r0 : 0;
-        }
-      }
-    }
-
-    return { ...p, _rainContrib: rainDelta };
+    const deltaSeconds = index > 0 ? (p.timestamp - sorted[index - 1].timestamp) / 1000 : 0;
+    const { delta, nextPrevValidRainfall } = computeCumulativeRainDeltaStep(
+      rainItems,
+      index,
+      prevValidRainfall,
+      deltaSeconds
+    );
+    prevValidRainfall = nextPrevValidRainfall;
+    return { ...p, _rainContrib: delta };
   });
+}
+
+export function aggregateHourly(rows: SensorDate[]): HourlyRecord[] {
+  const withContrib = computeHourlyRainContribs(rows);
 
   const byHour = new Map<string, typeof withContrib>();
   for (const r of withContrib) {
@@ -528,80 +482,7 @@ const FMT_HOUR_UTC = new Intl.DateTimeFormat("id-ID", {
 });
 
 export function aggregateHourlyUTC(rows: SensorDate[]): HourlyRecord[] {
-  const MAX_RAINRATE_MM_HR = 300;  // Physical upper bound
-  const MAX_INTERVAL_SEC   = 1800; // 30-min gap — ignore long data gaps
-  const SENSOR_JITTER_THRESHOLD = 1.0; // mm (noise / 1-tip vibration tolerance)
-  const MAX_RESET_BASE = 5.0; // mm (max plausible counter value on daily reset)
-
-  // Sort globally first so delta computation is correct across hour boundaries
-  const sorted = [...rows].sort((a, b) => a.timestamp - b.timestamp);
-  let prevValidRainfall: number | null = null;
-
-  // Compute delta contribution for each reading:
-  // Hardware sensors report running cumulative rainfall (reset daily at 00:00 UTC / 07:00 WIB).
-  // We compute the positive delta (difference) between consecutive readings to obtain true physical precipitation.
-  // Pre-aggregated hourly inputs (marked by tempMax) already represent hourly totals, so _rainContrib = p.rainfall.
-  const withContrib = sorted.map((p, index) => {
-    // 0. Pre-aggregated hourly record: rainfall is already the accumulated delta for this hour
-    if ((p as any).tempMax != null) {
-      const r = Number(p.rainfall);
-      return { ...p, _rainContrib: Number.isFinite(r) && r >= 0 ? r : 0 };
-    }
-
-    let rainDelta = 0;
-
-    if (index > 0) {
-      const prev = sorted[index - 1];
-      const deltaSeconds = (p.timestamp - prev.timestamp) / 1000;
-
-      // 1. Primary: Cumulative rainfall counter delta
-      if (
-        p.rainfall != null && Number.isFinite(Number(p.rainfall)) &&
-        prevValidRainfall !== null
-      ) {
-        const curRf = Number(p.rainfall);
-        const prevRf = prevValidRainfall;
-        const diff = curRf - prevRf;
-
-        if (diff >= 0 && diff <= 50) {
-          // Normal accumulation within realistic physical limit per interval (<= 50 mm)
-          rainDelta = diff;
-          prevValidRainfall = curRf;
-        } else if (diff < 0) {
-          if (Math.abs(diff) <= SENSOR_JITTER_THRESHOLD) {
-            // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevValidRainfall
-            rainDelta = 0;
-          } else if (curRf >= 0 && curRf <= MAX_RESET_BASE) {
-            // Daily counter reset (e.g. at 07:00 WIB / 00:00 UTC) or station reboot
-            rainDelta = curRf;
-            prevValidRainfall = curRf;
-          } else {
-            // Anomalous negative drop while counter remains high (> 5.0 mm): do NOT add curRf
-            rainDelta = 0;
-            prevValidRainfall = curRf;
-          }
-        }
-      } else if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
-        prevValidRainfall = Number(p.rainfall);
-      }
-      // 2. Secondary fallback: When rainfall counter is unavailable, integrate instantaneous rainrate
-      else if (deltaSeconds > 0 && deltaSeconds <= MAX_INTERVAL_SEC) {
-        const rr = Number(p.rainrate);
-        const validRR = Number.isFinite(rr) && rr >= 0 ? Math.min(rr, MAX_RAINRATE_MM_HR) : 0;
-        rainDelta = validRR * (deltaSeconds / 3600);
-      }
-    } else {
-      if (p.rainfall != null && Number.isFinite(Number(p.rainfall))) {
-        const r0 = Number(p.rainfall);
-        if (r0 >= 0 && r0 <= 50) {
-          prevValidRainfall = r0;
-          rainDelta = r0 <= MAX_RESET_BASE ? r0 : 0;
-        }
-      }
-    }
-
-    return { ...p, _rainContrib: rainDelta };
-  });
+  const withContrib = computeHourlyRainContribs(rows);
 
   const byHour = new Map<string, typeof withContrib>();
   for (const r of withContrib) {

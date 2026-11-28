@@ -14,6 +14,7 @@ import {
   equalTo,
 } from "firebase/database"; // Tambahkan 'orderByChild' dan 'equalTo'
 import { withCalibration } from "@/lib/calibration/applyCalibration";
+import { computeCumulativeRainDeltaStep, RainStepInput } from "@/lib/rainCounterUtils";
 
 export interface SensorValue {
   temperature: number;
@@ -214,13 +215,24 @@ export async function fetchSensorDataByDateRange(
         windSinSum: number; windCosSum: number; windDirCount: number;
       }>();
 
-      let prevRainfallVal: number | null = null;
-
+      const snapItems: Array<{ tsSec: number; tsMs: number; data: SensorValue }> = [];
       snapshot.forEach((childSnapshot) => {
         const timestampInSeconds = Number(childSnapshot.key);
-        const timestampInMillis = timestampInSeconds * 1000;
         const data: SensorValue = childSnapshot.val();
-        if (!data) return;
+        if (!data || !Number.isFinite(timestampInSeconds)) return;
+        snapItems.push({ tsSec: timestampInSeconds, tsMs: timestampInSeconds * 1000, data });
+      });
+
+      const rainInputs: RainStepInput[] = snapItems.map((it) => ({
+        tsMs: it.tsMs,
+        rainfall: it.data.rainfall,
+        rainrate: it.data.rainrate,
+      }));
+      let prevRainfallVal: number | null = null;
+
+      snapItems.forEach((item, idx) => {
+        const timestampInMillis = item.tsMs;
+        const data = item.data;
 
         const hourTs = Math.floor(timestampInMillis / 3600000) * 3600000;
         let b = buckets.get(hourTs);
@@ -280,32 +292,15 @@ export async function fetchSensorDataByDateRange(
           b.voltSum += Number(data.volt);
           b.voltCount++;
         }
-        if (data.rainfall != null && Number.isFinite(Number(data.rainfall))) {
-          const rf = Number(data.rainfall);
-          if (prevRainfallVal !== null) {
-            const diff = rf - prevRainfallVal;
-            if (diff >= 0 && diff <= 50) {
-              b.rainTotal += diff;
-              prevRainfallVal = rf;
-            } else if (diff < 0) {
-              if (Math.abs(diff) <= 1.0) {
-                // Micro-jitter / sensor noise drop (<= 1.0 mm): ignore, keep prevRainfallVal
-              } else if (rf >= 0 && rf <= 5.0) {
-                // Valid daily counter reset (00:00 UTC / 07:00 WIB or logger reboot) returning near zero
-                b.rainTotal += rf;
-                prevRainfallVal = rf;
-              } else {
-                // Anomalous drop while counter remains high (> 5.0 mm): do NOT add rf to rainTotal
-                prevRainfallVal = rf;
-              }
-            }
-          } else {
-            prevRainfallVal = rf;
-          }
-        } else if (data.rainrate != null && Number.isFinite(Number(data.rainrate))) {
-          const rr = Math.min(Math.max(0, Number(data.rainrate)), 300);
-          b.rainTotal += rr * (60 / 3600);
-        }
+        const deltaSec = idx > 0 ? Math.max(0, item.tsSec - snapItems[idx - 1].tsSec) : 60;
+        const { delta: rainStepDelta, nextPrevValidRainfall } = computeCumulativeRainDeltaStep(
+          rainInputs,
+          idx,
+          prevRainfallVal,
+          deltaSec
+        );
+        b.rainTotal += rainStepDelta;
+        prevRainfallVal = nextPrevValidRainfall;
         if (data.rainrate != null && Number.isFinite(Number(data.rainrate))) {
           if (Number(data.rainrate) > b.rainRateMax) b.rainRateMax = Number(data.rainrate);
         }

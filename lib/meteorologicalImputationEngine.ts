@@ -914,13 +914,13 @@ export function runUniversalGapImputation(
   const targetFallback =
     computeMedian(targetValuesForStats) ?? DEFAULT_BASELINE_BY_VAR[targetVarKey] ?? 0;
 
-  // Bangun profil diurnal node target (H-1..H-N) dan deret pembanding untuk pencarian biner kontinu
+  // Bangun profil diurnal node target (H-1..H-N) dan deret pembanding untuk pencarian biner kontinu (lewati rainfall/rainrate)
   const selfProfile =
-    enableSelfHistory && !isRainfallVar && selfHistoryRecords.length > 0
+    enableSelfHistory && !isRainfallVar && !isRainrateVar && selfHistoryRecords.length > 0
       ? buildSelfHistoryDiurnalProfile(selfHistoryRecords, targetVarKey)
       : null;
   const selfHistorySamples =
-    !isRainfallVar && selfHistoryRecords.length > 0
+    !isRainfallVar && !isRainrateVar && selfHistoryRecords.length > 0
       ? buildSortedSamples(selfHistoryRecords, targetVarKey)
       : [];
   const companionSamples = buildSortedSamples(companionRecords, targetVarKey);
@@ -1147,6 +1147,11 @@ export function runUniversalGapImputation(
             segLen
           );
         }
+      } else if (isRainrateVar && seg.valBefore !== null && seg.valAfter !== null) {
+        // Micro-gap rainrate: interpolasi linear non-negatif agar hujan aktif tidak overshoot/drop ke 0
+        for (let k = 0; k < segLen; k++) {
+          rawPredicted[k] = Math.max(0, interpolateGapLinear(seg.valBefore, seg.valAfter, k, segLen));
+        }
       } else if (
         seg.valBefore !== null &&
         seg.valAfter !== null &&
@@ -1318,10 +1323,11 @@ export function runUniversalGapImputation(
       }
     }
 
-    // Fase 2.5: Boundary-Conditioned Residual Bridging (lewati pada rainfall agar monotonicity terjaga)
+    // Fase 2.5: Boundary-Conditioned Residual Bridging (lewati pada rainfall/rainrate agar monotonicity & non-overshoot terjaga)
     const shouldBridge =
       enableBridge &&
       !isRainfallVar &&
+      !isRainrateVar &&
       (chosenPhase === "self_history" || chosenPhase === "companion_ridge" || chosenPhase === "model_guided");
     const bridged = shouldBridge
       ? applyBoundaryBridging(rawPredicted, seg.valBefore, seg.valAfter, predAtBefore, predAtAfter)

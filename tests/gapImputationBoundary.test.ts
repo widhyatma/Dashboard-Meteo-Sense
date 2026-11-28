@@ -6,6 +6,7 @@ import {
   buildCompleteGapNodePayloads,
   getWibTimeComponents,
 } from "../lib/meteorologicalImputationEngine";
+import { computeCumulativeRainDeltaStep } from "../lib/rainCounterUtils";
 
 describe("Gap Imputation End-Boundary Clamping (Today vs Historical)", () => {
   const wibMs = (isoWib: string) => new Date(`${isoWib}+07:00`).getTime();
@@ -101,5 +102,31 @@ describe("Gap Imputation End-Boundary Clamping (Today vs Historical)", () => {
     assert.equal(boundary.wasClampedToLastData, false);
     assert.equal(boundary.wasClampedToNow, true);
     assert.equal(boundary.effectiveEndTs, wibMs("2026-11-25T10:15:00"));
+  });
+
+  it("should ignore transient mid-day zero-drops in cumulative rainfall and keep rainrate micro-gaps linear", () => {
+    const startTs = wibMs("2026-11-26T22:24:00");
+    const items = [
+      { tsMs: startTs, rainfall: 30.864, rainrate: 0.643 },
+      { tsMs: startTs + 60_000, rainfall: 30.864, rainrate: 0.643 },
+      { tsMs: startTs + 120_000, rainfall: 0.0, rainrate: 0.0 },
+      { tsMs: startTs + 180_000, rainfall: 30.864, rainrate: 0.643 },
+    ];
+    let prev: number | null = null;
+    let totalDelta = 0;
+    for (let i = 0; i < items.length; i++) {
+      const { delta, nextPrevValidRainfall } = computeCumulativeRainDeltaStep(items, i, prev, 60);
+      totalDelta += delta;
+      prev = nextPrevValidRainfall;
+    }
+    assert.equal(Number(totalDelta.toFixed(3)), 0);
+
+    const rrRecords = [
+      { timestamp: startTs, rainrate: 0.643 },
+      { timestamp: startTs + 60_000, rainrate: 0.643 },
+      { timestamp: startTs + 180_000, rainrate: 0.643 },
+    ];
+    const rrRes = runUniversalGapImputation(rrRecords, startTs, startTs + 180_000, "rainrate");
+    assert.equal(rrRes.grid[2].imputedVal, 0.64);
   });
 });
