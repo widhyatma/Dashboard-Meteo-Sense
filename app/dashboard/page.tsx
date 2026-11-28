@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -32,7 +32,8 @@ import { useAuth } from "@/hooks/useAuth"
 import { useNodeHealth } from "@/context/NodeHealthContext"
 import Loading from "@/app/loading"
 import { fetchAllDevices, Device } from "@/lib/FetchingDevice"
-import { fetchSensorMetadata, fetchSensorData } from "@/lib/apiClient"
+import { fetchDashboardLatestBatch } from "@/lib/apiClient"
+import { useSmartRtdbPolling } from "@/hooks/useSmartRtdbPolling"
 import type { SensorDate } from "@/lib/FetchingSensorData"
 import { fetchRecentAlerts, LogEvent } from "@/lib/FetchingLogs"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -162,6 +163,7 @@ export default function DashboardPage() {
   })
   const [recentAlerts, setRecentAlerts] = useState<LogEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const devicesCacheRef = useRef<Device[]>([])
 
   // Background Periodic Node Health Supervisor Context
   const {
@@ -207,51 +209,71 @@ export default function DashboardPage() {
     }
   }, [healthReports])
 
+  const applyTelemetryBatch = useCallback(async (targetDevices: Device[], forceRefresh: boolean = false) => {
+    const tokens = targetDevices.map((d) => d.authToken || d.id).filter(Boolean);
+    const batch = await fetchDashboardLatestBatch(tokens, true, forceRefresh);
+    const snapMap = new Map(batch.items.map((item) => [item.sensorId, item]));
+
+    const devicesWithDetails: DeviceWithStatus[] = targetDevices.map((device) => {
+      const sensorToken = device.authToken || device.id;
+      const snap = snapMap.get(sensorToken);
+      return {
+        ...device,
+        status: snap?.TelemetryStatus || "offline",
+        lastUpdate: snap?.lastUpdate ?? null,
+        latestData: snap?.latest ?? undefined,
+      };
+    });
+
+    setDevices(devicesWithDetails);
+    const onlineCount = devicesWithDetails.filter((d) => d.status === "online").length;
+    setDeviceStats({
+      totalDevices: targetDevices.length,
+      onlineDevices: onlineCount,
+    });
+  }, []);
+
+  const pollRtdbTelemetryOnly = useCallback(async () => {
+    if (!user?.uid || devicesCacheRef.current.length === 0) return;
+    await applyTelemetryBatch(devicesCacheRef.current, false);
+  }, [user?.uid, applyTelemetryBatch]);
+
+  const {
+    isLive: livePollingEnabled,
+    toggleLive: toggleLivePolling,
+    isPausedVisibility,
+    isPausedIdle,
+    isSyncing: pollingSyncing,
+    lastSyncedAt,
+    resumeNow: resumePollingNow,
+  } = useSmartRtdbPolling({
+    enabled: Boolean(user?.uid) && !loading && devices.length > 0,
+    defaultLive: true,
+    intervalMs: 15_000,
+    idleTimeoutMs: 30 * 60 * 1000,
+    onPoll: pollRtdbTelemetryOnly,
+  });
+
   const loadDashboardData = useCallback(async (forceRefresh: boolean = false) => {
     if (!user?.uid) return
     setLoading(true)
 
     try {
-      // Fetch all registered devices for the user
+      // Ambil daftar perangkat dari Firestore saat muat awal atau manual refresh
       const userDevices = await fetchAllDevices(user.uid)
+      devicesCacheRef.current = userDevices
 
-      // Fetch status and latest data for each device in parallel
-      const devicesWithDetails = await Promise.all(
-        userDevices.map(async (device) => {
-          const sensorToken = device.authToken || device.id
-          const [metadata, latestDataArr] = await Promise.all([
-            fetchSensorMetadata(sensorToken, forceRefresh),
-            fetchSensorData(sensorToken, 1, true, forceRefresh),
-          ])
-          return {
-            ...device,
-            status: metadata.TelemetryStatus,
-            lastUpdate: metadata.lastUpdate,
-            latestData: latestDataArr.length > 0 ? latestDataArr[0] : undefined,
-          }
-        }),
-      )
-
-      // Fetch recent alerts
-      const alerts = await fetchRecentAlerts(user.uid, 5)
+      const [, alerts] = await Promise.all([
+        applyTelemetryBatch(userDevices, forceRefresh),
+        fetchRecentAlerts(user.uid, 5),
+      ])
       setRecentAlerts(alerts)
-
-      // Update state with fetched data
-      setDevices(devicesWithDetails)
-
-      // Calculate stats
-      const onlineCount = devicesWithDetails.filter((d) => d.status === "online").length
-
-      setDeviceStats({
-        totalDevices: userDevices.length,
-        onlineDevices: onlineCount,
-      })
     } catch (error) {
       console.error("Failed to load dashboard data:", error)
     } finally {
       setLoading(false)
     }
-  }, [user?.uid])
+  }, [user?.uid, applyTelemetryBatch])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -295,15 +317,53 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Beranda</h2>
           <p className="text-muted-foreground dark:text-gray-400">Ringkasan sistem monitoring cuaca</p>
         </div>
-        <Button
-          onClick={handleRefresh}
-          disabled={loading}
-          variant="outline"
-          className="bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-700 dark:hover:bg-green-800 dark:text-gray-50"
-        >
-          <RefreshCwIcon className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={livePollingEnabled && !isPausedIdle ? "default" : "outline"}
+            size="sm"
+            onClick={isPausedIdle ? resumePollingNow : toggleLivePolling}
+            title="Polling RTDB tiap 15 detik (otomatis jeda saat tab disembunyikan atau idle >30 menit agar hemat kuota Firebase Free Tier)"
+            className={
+              livePollingEnabled && !isPausedIdle
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs font-semibold gap-1.5"
+                : "h-9 text-xs font-semibold gap-1.5"
+            }
+          >
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                !livePollingEnabled || isPausedIdle
+                  ? "bg-slate-400"
+                  : isPausedVisibility
+                  ? "bg-amber-300"
+                  : pollingSyncing
+                  ? "bg-white animate-ping"
+                  : "bg-emerald-200 animate-pulse"
+              }`}
+            />
+            {isPausedIdle
+              ? "Jeda Idle • Lanjutkan"
+              : !livePollingEnabled
+              ? "Live 15d: OFF"
+              : isPausedVisibility
+              ? "Live 15d (Dijeda)"
+              : "Live 15d"}
+          </Button>
+          {lastSyncedAt && (
+            <Badge variant="outline" className="text-[11px] font-mono h-9 px-2.5 text-muted-foreground">
+              {lastSyncedAt.toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour12: false })} WIB
+            </Badge>
+          )}
+          <Button
+            onClick={handleRefresh}
+            disabled={loading}
+            variant="outline"
+            className="bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-700 dark:hover:bg-green-800 dark:text-gray-50 h-9"
+          >
+            <RefreshCwIcon className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats Overview */}

@@ -393,6 +393,91 @@ export async function fetchSensorDataByDateRange(
   }
 }
 
+export interface LatestSensorSnapshot {
+  sensorId: string;
+  TelemetryStatus: "online" | "offline";
+  lastUpdate: number | null;
+  latest: SensorDate | null;
+}
+
+/**
+ * Mengambil status + data terbaru dalam 1x kueri limitToLast(1) agar tidak terjadi double-fetch.
+ */
+export async function fetchLatestSensorSnapshot(
+  sensorId: string,
+  applyCalibration: boolean = true
+): Promise<LatestSensorSnapshot> {
+  try {
+    const dataRef = query(
+      ref(rtdb, `auto_weather_stat/${sensorId}/data`),
+      orderByKey(),
+      limitToLast(1)
+    );
+    const snapshot = await get(dataRef);
+    if (!snapshot.exists()) {
+      return { sensorId, TelemetryStatus: "offline", lastUpdate: null, latest: null };
+    }
+
+    let latestTimestamp: number | null = null;
+    let latestRaw: SensorValue | null = null;
+    snapshot.forEach((child) => {
+      latestTimestamp = Number(child.key) * 1000;
+      latestRaw = child.val();
+    });
+
+    if (!latestRaw || !latestTimestamp || !Number.isFinite(latestTimestamp)) {
+      return { sensorId, TelemetryStatus: "offline", lastUpdate: null, latest: null };
+    }
+
+    const mapped = mapRawSensorSnapshot(latestTimestamp, latestRaw);
+    const calibrated = await withCalibration(sensorId, [mapped], applyCalibration);
+    const status: "online" | "offline" = Date.now() - latestTimestamp < 3 * 60 * 1000 ? "online" : "offline";
+
+    return {
+      sensorId,
+      TelemetryStatus: status,
+      lastUpdate: latestTimestamp,
+      latest: calibrated[0] ?? mapped,
+    };
+  } catch (error) {
+    console.error(`Gagal mengambil snapshot terbaru untuk ${sensorId}:`, error);
+    return { sensorId, TelemetryStatus: "offline", lastUpdate: null, latest: null };
+  }
+}
+
+/**
+ * Mengambil hanya node delta baru setelah `sinceTimestampMs` untuk polling 15s hemat bandwidth.
+ */
+export async function fetchSensorDataDelta(
+  sensorId: string,
+  sinceTimestampMs: number,
+  applyCalibration: boolean = true
+): Promise<SensorDate[]> {
+  try {
+    const nextSec = Math.max(1, Math.floor(sinceTimestampMs / 1000) + 1);
+    const dataRef = query(
+      ref(rtdb, `auto_weather_stat/${sensorId}/data`),
+      orderByKey(),
+      startAt(String(nextSec))
+    );
+    const snapshot = await get(dataRef);
+    if (!snapshot.exists()) return [];
+
+    const results: SensorDate[] = [];
+    snapshot.forEach((childSnapshot) => {
+      const tsSec = Number(childSnapshot.key);
+      const val: SensorValue = childSnapshot.val();
+      if (!val || !Number.isFinite(tsSec)) return;
+      results.push(mapRawSensorSnapshot(tsSec * 1000, val));
+    });
+    results.sort((a, b) => a.timestamp - b.timestamp);
+    return await withCalibration(sensorId, results, applyCalibration);
+  } catch (error) {
+    console.error(`Gagal mengambil delta data sensor ${sensorId}:`, error);
+    throw error;
+  }
+}
+
 /**
  * Mengambil metadata dan status sensor terakhir.
  * Status "online" jika data terakhir kurang dari 3 menit, jika tidak "offline".
@@ -402,61 +487,12 @@ export async function fetchSensorDataByDateRange(
 export async function fetchSensorMetadata(
   sensorId: string
 ): Promise<SensorMetaData> {
-  try {
-    const dataRef = query(
-      ref(rtdb, `auto_weather_stat/${sensorId}/data`),
-      orderByKey(),
-      limitToLast(1)
-    );
-
-    const snapshot = await get(dataRef);
-
-    if (!snapshot.exists()) {
-      // Jika tidak ada data, anggap offline dan kembalikan nilai default
-      return {
-        sensorId: sensorId,
-        TelemetryStatus: "offline",
-        lastUpdate: null,
-      };
-    }
-
-    let latestData: SensorValue | null = null;
-    let latestTimestamp: number | null = null;
-
-    snapshot.forEach((child) => {
-      latestTimestamp = Number(child.key) * 1000; // konversi ke milidetik
-      latestData = child.val();
-    });
-
-    if (!latestData || !latestTimestamp) {
-      return {
-        sensorId: sensorId,
-        TelemetryStatus: "offline",
-        lastUpdate: null,
-      };
-    }
-
-    const currentTime = Date.now();
-    const timeDifference = currentTime - latestTimestamp;
-    const threeMinutesInMillis = 3 * 60 * 1000;
-
-    const status: "online" | "offline" =
-      timeDifference < threeMinutesInMillis ? "online" : "offline";
-
-    return {
-      sensorId: sensorId,
-      TelemetryStatus: status,
-      lastUpdate: latestTimestamp,
-    };
-  } catch (error) {
-    console.error(`Gagal mengambil metadata untuk sensor ${sensorId}:`, error);
-    // In case of error, return offline status
-    return {
-      sensorId: sensorId,
-      TelemetryStatus: "offline",
-      lastUpdate: null,
-    };
-  }
+  const snap = await fetchLatestSensorSnapshot(sensorId, false);
+  return {
+    sensorId: snap.sensorId,
+    TelemetryStatus: snap.TelemetryStatus,
+    lastUpdate: snap.lastUpdate,
+  };
 }
 
 /**

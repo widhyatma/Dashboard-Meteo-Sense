@@ -9,7 +9,15 @@ interface CacheEntry {
   timestamp: number;
 }
 const calibrationCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 menit cache TTL agar polling 15s tidak membaca Firestore
+
+export function invalidateCalibrationCache(stationId?: string): void {
+  if (stationId) {
+    calibrationCache.delete(stationId);
+  } else {
+    calibrationCache.clear();
+  }
+}
 
 /**
  * Fetches config from cache or Firestore.

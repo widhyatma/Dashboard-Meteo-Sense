@@ -3,7 +3,10 @@ import {
   fetchSensorData,
   fetchSensorDataByDateRange,
   fetchSensorDataByValue,
-  fetchSensorMetadata
+  fetchSensorMetadata,
+  fetchLatestSensorSnapshot,
+  fetchSensorDataDelta,
+  type LatestSensorSnapshot,
 } from "@/lib/FetchingSensorData";
 import { aggregateSensorToHourly } from "@/lib/bias-correction/preprocessing/hourlyAggregation";
 import { compressTimeSeries } from "@/lib/compression/adaptiveTimeSeries";
@@ -15,6 +18,13 @@ type CacheEntry = {
 const rangeCache = new Map<string, CacheEntry>();
 const MAX_CACHE_ENTRIES = 50;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit TTL
+const COALESCED_LATEST_TTL_MS = 12 * 1000; // 12 detik coalesced cache untuk polling 15 detik multi-user
+
+const dashboardLatestCache = new Map<
+  string,
+  { fetchedAt: number; items: LatestSensorSnapshot[] }
+>();
+const inFlightDashboardLatest = new Map<string, Promise<LatestSensorSnapshot[]>>();
 
 export const revalidate = 60; // Cache for 1 minute
 
@@ -25,7 +35,7 @@ export async function GET(request: Request) {
   const calibrationStr = searchParams.get("calibration");
   const applyCalibration = calibrationStr !== "false"; // Default to true unless explicitly false
 
-  if (!sensorId || !action) {
+  if (!action || (!sensorId && action !== "dashboard-latest")) {
     return NextResponse.json({ error: "sensorId and action are required" }, { status: 400 });
   }
 
@@ -43,14 +53,67 @@ export async function GET(request: Request) {
 
   try {
     switch (action) {
+      case "dashboard-latest": {
+        const idsParam = searchParams.get("ids") || "";
+        const ids = Array.from(
+          new Set(
+            idsParam
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          )
+        ).sort();
+        if (ids.length === 0) {
+          return NextResponse.json({ error: "ids query parameter is required" }, { status: 400 });
+        }
+        const cacheKey = `${ids.join(",")}:${applyCalibration}`;
+        const now = Date.now();
+        const cached = dashboardLatestCache.get(cacheKey);
+        if (!isRefresh && cached && now - cached.fetchedAt < COALESCED_LATEST_TTL_MS) {
+          return NextResponse.json(
+            { fetchedAt: cached.fetchedAt, cacheHit: true, items: cached.items },
+            { headers: { "Cache-Control": "no-store", "X-Cache": "COALESCED-HIT" } }
+          );
+        }
+
+        let promise = inFlightDashboardLatest.get(cacheKey);
+        if (!promise) {
+          promise = Promise.all(ids.map((id) => fetchLatestSensorSnapshot(id, applyCalibration)))
+            .then((items) => {
+              dashboardLatestCache.set(cacheKey, { fetchedAt: Date.now(), items });
+              return items;
+            })
+            .finally(() => {
+              inFlightDashboardLatest.delete(cacheKey);
+            });
+          inFlightDashboardLatest.set(cacheKey, promise);
+        }
+
+        const items = await promise;
+        return NextResponse.json(
+          { fetchedAt: Date.now(), cacheHit: false, items },
+          { headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      case "delta": {
+        const sinceStr = searchParams.get("since");
+        const sinceMs = sinceStr ? parseInt(sinceStr, 10) : 0;
+        if (!Number.isFinite(sinceMs) || sinceMs <= 0) {
+          return NextResponse.json({ error: "Valid since timestamp (ms) is required" }, { status: 400 });
+        }
+        const data = await fetchSensorDataDelta(sensorId!, sinceMs, applyCalibration);
+        return NextResponse.json(data, {
+          headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+        });
+      }
       case "metadata": {
-        const data = await fetchSensorMetadata(sensorId);
+        const data = await fetchSensorMetadata(sensorId!);
         return NextResponse.json(data, responseOptions);
       }
       case "latest": {
         const limitStr = searchParams.get("limit");
         const limit = limitStr ? parseInt(limitStr, 10) : 1;
-        const data = await fetchSensorData(sensorId, limit, applyCalibration);
+        const data = await fetchSensorData(sensorId!, limit, applyCalibration);
         if (isCompact && Array.isArray(data) && data.length > 0) {
           return NextResponse.json(compressTimeSeries(data, maxPoints), responseOptions);
         }
@@ -80,7 +143,7 @@ export async function GET(request: Request) {
         }
 
         const data = await fetchSensorDataByDateRange(
-          sensorId,
+          sensorId!,
           startTimestamp,
           endTimestamp,
           applyCalibration,
@@ -106,7 +169,7 @@ export async function GET(request: Request) {
           return NextResponse.json({ error: "field and value are required for value action" }, { status: 400 });
         }
         const value = parseFloat(valueStr);
-        const data = await fetchSensorDataByValue(sensorId, field, value, applyCalibration);
+        const data = await fetchSensorDataByValue(sensorId!, field, value, applyCalibration);
         if (isCompact && Array.isArray(data) && data.length > 0) {
           return NextResponse.json(compressTimeSeries(data, maxPoints), responseOptions);
         }

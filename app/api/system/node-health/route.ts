@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { db, rtdb } from "@/lib/ConfigFirebase";
-import { collection, getDocs, query, Timestamp } from "firebase/firestore";
+import { rtdb } from "@/lib/ConfigFirebase";
+import { getCachedDevicesFromFirestore } from "@/lib/firebaseDeviceCache";
 import { ref, get, set, query as rtdbQuery, orderByKey, limitToLast } from "firebase/database";
 
 export const dynamic = "force-dynamic";
@@ -52,22 +52,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    // 1. Fetch registered devices for this user
-    const devicesRef = collection(db, "devices");
-    const q = query(devicesRef);
-    const querySnapshot = await getDocs(q);
-
-    const userDevices = querySnapshot.docs
-      .map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || doc.id,
-          location: data.location || "Lokasi AWS",
-          userId: data.userId,
-          authToken: data.authToken,
-        };
-      })
+    // 1. Fetch registered devices from 15-min cached Firestore snapshot (Spark quota safe)
+    const allDevices = await getCachedDevicesFromFirestore();
+    const userDevices = allDevices
+      .map((d) => ({
+        id: d.id,
+        name: d.name || d.id,
+        location: d.location || "Lokasi AWS",
+        userId: d.userId,
+        authToken: d.authToken,
+      }))
       .filter((d) => !d.userId || d.userId === userId);
 
     if (userDevices.length === 0) {

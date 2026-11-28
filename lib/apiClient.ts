@@ -1,4 +1,4 @@
-import type { SensorDate, SensorValue, SensorMetaData } from "@/lib/FetchingSensorData";
+import type { SensorDate, SensorValue, SensorMetaData, LatestSensorSnapshot } from "@/lib/FetchingSensorData";
 import {
   decompressTimeSeries,
   compressTimeSeries,
@@ -75,6 +75,38 @@ export async function fetchSensorMetadata(
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || "Failed to fetch sensor metadata");
+  }
+  return res.json();
+}
+
+export async function fetchDashboardLatestBatch(
+  sensorIds: string[],
+  applyCalibration: boolean = true,
+  forceRefresh: boolean = false
+): Promise<{ fetchedAt: number; cacheHit: boolean; items: LatestSensorSnapshot[] }> {
+  const cleanIds = sensorIds.map((s) => s.trim()).filter(Boolean);
+  if (cleanIds.length === 0) {
+    return { fetchedAt: Date.now(), cacheHit: true, items: [] };
+  }
+  const url = `/api/sensors?action=dashboard-latest&ids=${encodeURIComponent(cleanIds.join(","))}&calibration=${applyCalibration}${forceRefresh ? `&refresh=true&_t=${Date.now()}` : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || "Failed to fetch latest dashboard telemetry");
+  }
+  return res.json();
+}
+
+export async function fetchSensorDataDelta(
+  sensorId: string,
+  sinceTimestampMs: number,
+  applyCalibration: boolean = false
+): Promise<SensorDate[]> {
+  const url = `/api/sensors?action=delta&sensorId=${encodeURIComponent(sensorId)}&since=${Math.floor(sinceTimestampMs)}&calibration=${applyCalibration}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || "Failed to fetch incremental sensor delta");
   }
   return res.json();
 }

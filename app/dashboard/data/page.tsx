@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -58,7 +58,10 @@ import {
   fetchSensorData,
   fetchSensorDataByDateRange,
   fetchSensorDataByValue,
+  fetchSensorDataDelta,
 } from "@/lib/apiClient";
+import { mergeDeltaReadings } from "@/lib/smartPollingUtils";
+import { useSmartRtdbPolling } from "@/hooks/useSmartRtdbPolling";
 import { filterByTimeRange, getPlotlyTimeJakarta } from "@/lib/timeUtils";
 import { fetchRecentAlerts, LogEvent } from "@/lib/FetchingLogs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -229,6 +232,7 @@ export default function DataPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>(periods[1]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [isMobile, setIsMobile] = useState(false);
+  const liveRecordsRef = useRef<SensorDate[]>([]);
 
   // Deteksi ukuran layar responsif untuk popover kalender
   useEffect(() => {
@@ -340,7 +344,8 @@ export default function DataPage() {
   };
 
   // Fungsi untuk memproses dan mengatur state data grafik dan tabel
-  const processAndSetData = (data: SensorDate[]) => {
+  const processAndSetData = useCallback((data: SensorDate[]) => {
+    liveRecordsRef.current = data;
     if (data.length > 0) {
       const fetchedTimestamps: string[] = data.map((d) => getPlotlyTimeJakarta(d.timestamp));
       const fetchedTemperatures: number[] = data.map((d) => d.temperature);
@@ -370,21 +375,29 @@ export default function DataPage() {
       setWeatherData([]);
       setError("Tidak ada data yang tersedia untuk periode ini.");
     }
-  };
+  }, []);
 
-  // Fetch data untuk pembaruan di background (polling)
+  // Incremental delta polling 15 detik: hanya menarik titik baru > timestamp terakhir (Spark Free Tier safe)
   const updateData = useCallback(async () => {
     if (!sensorId) return;
-    try {
-      const rangeMs = selectedPeriod.valueInMinutes * 60000;
-      const now = Date.now();
-      const rawData = await fetchSensorDataByDateRange(sensorId, now - rangeMs, now, false);
+    const rangeMs = selectedPeriod.valueInMinutes * 60000;
+    const now = Date.now();
+    const existing = liveRecordsRef.current;
+
+    if (existing.length === 0) {
+      const rawData = await fetchSensorDataByDateRange(sensorId, now - rangeMs, now, false, true);
       const data = filterByTimeRange(rawData, rangeMs);
       processAndSetData(data);
-    } catch (err: any) {
-      console.error("Gagal melakukan polling data:", err);
+      return;
     }
-  }, [sensorId, selectedPeriod]);
+
+    const lastTs = existing[existing.length - 1].timestamp;
+    const delta = await fetchSensorDataDelta(sensorId, lastTs, false);
+    const merged = mergeDeltaReadings(existing, delta, now - rangeMs);
+    if (delta.length > 0 || merged.length !== existing.length) {
+      processAndSetData(merged);
+    }
+  }, [sensorId, selectedPeriod, processAndSetData]);
 
   const fetchData = useCallback(async (forceRefresh: boolean = false) => {
     if (!sensorId) {
@@ -460,17 +473,30 @@ export default function DataPage() {
     }
   }, [sensorId, searchField, searchQuery]);
 
-  // Inisialisasi komponen dan refresh data
+  // Smart 15-second delta polling (pause otomatis saat tab tersembunyi atau idle >30m)
+  const isLiveRangeEligible = Boolean(sensorId) && selectedPeriod.valueInMinutes <= 60 && !dateRange && !searchQuery;
+  const {
+    isLive: livePollingEnabled,
+    toggleLive: toggleLivePolling,
+    isPausedVisibility,
+    isPausedIdle,
+    isSyncing: pollingSyncing,
+    resumeNow: resumePollingNow,
+  } = useSmartRtdbPolling({
+    enabled: isLiveRangeEligible && !loading,
+    defaultLive: true,
+    intervalMs: 15_000,
+    idleTimeoutMs: 30 * 60 * 1000,
+    onPoll: updateData,
+  });
+
+  // Inisialisasi komponen dan muat ulang saat filter berubah
   useEffect(() => {
     if (sensorId) {
+      liveRecordsRef.current = [];
       fetchData();
     }
-
-    if (sensorId && selectedPeriod.valueInMinutes <= 60 && !dateRange) {
-      const interval = setInterval(updateData, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [fetchData, updateData, selectedPeriod.valueInMinutes, dateRange, sensorId]);
+  }, [fetchData, sensorId]);
 
   // Deteksi mode dark dari Tailwind
   useEffect(() => {
@@ -1107,6 +1133,34 @@ export default function DataPage() {
               </Button>
 
               <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-0.5 hidden sm:block" />
+
+              {isLiveRangeEligible && (
+                <Button
+                  type="button"
+                  variant={livePollingEnabled && !isPausedIdle ? "default" : "outline"}
+                  size="sm"
+                  onClick={isPausedIdle ? resumePollingNow : toggleLivePolling}
+                  title="Polling delta RTDB tiap 15 detik (otomatis jeda saat tab disembunyikan atau idle >30 menit agar hemat kuota Firebase Free Tier)"
+                  className={`h-8 text-xs font-semibold px-2.5 gap-1.5 cursor-pointer ${
+                    livePollingEnabled && !isPausedIdle
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      !livePollingEnabled || isPausedIdle
+                        ? "bg-slate-400"
+                        : isPausedVisibility
+                        ? "bg-amber-300"
+                        : pollingSyncing
+                        ? "bg-white animate-ping"
+                        : "bg-emerald-200 animate-pulse"
+                    }`}
+                  />
+                  {isPausedIdle ? "Jeda Idle" : !livePollingEnabled ? "Live 15d: OFF" : "Live 15d"}
+                </Button>
+              )}
 
               <Button
                 variant="outline"
